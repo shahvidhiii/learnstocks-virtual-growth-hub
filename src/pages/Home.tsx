@@ -114,7 +114,7 @@ const mockStocks: Stock[] = [
 ];
 
 const Home = () => {
-  const [isFirstLogin, setIsFirstLogin] = useState(true);
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [lastLoginDate, setLastLoginDate] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState(10000);
   const [portfolio, setPortfolio] = useState<Portfolio>(mockPortfolio);
@@ -122,12 +122,22 @@ const Home = () => {
   const [selectedTab, setSelectedTab] = useState("portfolio");
   
   useEffect(() => {
-    // Simulate fetching user data
-    // In a real app, this would be an API call
-    setIsFirstLogin(false); // For demo purposes, toggle to true to see welcome bonus
-    setLastLoginDate(localStorage.getItem("lastLoginDate"));
+    // Check if this is the first login ever
+    const hasLoggedInBefore = localStorage.getItem("hasLoggedInBefore");
     
-    // Update last login date
+    if (!hasLoggedInBefore) {
+      // First time login
+      setIsFirstLogin(true);
+      localStorage.setItem("hasLoggedInBefore", "true");
+    } else {
+      setIsFirstLogin(false);
+    }
+    
+    // Get the last login date
+    const storedLastLoginDate = localStorage.getItem("lastLoginDate");
+    setLastLoginDate(storedLastLoginDate);
+    
+    // Update last login date to today
     const today = new Date().toISOString();
     localStorage.setItem("lastLoginDate", today);
     
