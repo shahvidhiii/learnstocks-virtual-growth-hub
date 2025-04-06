@@ -9,7 +9,90 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          age: number | null
+          created_at: string | null
+          experience: string | null
+          id: string
+          investment_goals: string[] | null
+          last_login_date: string | null
+          name: string | null
+          points: number | null
+          profile_completed: boolean | null
+          risk_tolerance: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          age?: number | null
+          created_at?: string | null
+          experience?: string | null
+          id: string
+          investment_goals?: string[] | null
+          last_login_date?: string | null
+          name?: string | null
+          points?: number | null
+          profile_completed?: boolean | null
+          risk_tolerance?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          age?: number | null
+          created_at?: string | null
+          experience?: string | null
+          id?: string
+          investment_goals?: string[] | null
+          last_login_date?: string | null
+          name?: string | null
+          points?: number | null
+          profile_completed?: boolean | null
+          risk_tolerance?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sectors: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      user_sectors: {
+        Row: {
+          created_at: string | null
+          id: string
+          sector: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          sector: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          sector?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

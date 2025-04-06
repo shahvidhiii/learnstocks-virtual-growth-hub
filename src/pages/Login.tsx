@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -15,45 +16,73 @@ const Login = () => {
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate login API call
-    setTimeout(() => {
-      // Normally you would verify credentials with your backend
-      if (email && password) {
-        // Check if user exists and has completed profile setup
-        const hasCompletedProfile = false; // This would come from your backend
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+
+      toast.success("Login successful!");
+      
+      // Check if the user has completed profile setup
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('profile_completed')
+        .eq('id', data.user.id)
+        .single();
         
-        toast.success("Login successful!");
-        
-        if (hasCompletedProfile) {
-          navigate("/home");
-        } else {
-          navigate("/profile-setup");
-        }
-      } else {
-        toast.error("Invalid email or password");
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
       }
+      
+      if (profileData && profileData.profile_completed) {
+        navigate("/home");
+      } else {
+        navigate("/profile-setup");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to login");
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate signup API call
-    setTimeout(() => {
-      if (name && email && password) {
-        toast.success("Account created successfully!");
-        navigate("/profile-setup");
-      } else {
-        toast.error("Please fill all fields");
-      }
+    if (!name || !email || !password) {
+      toast.error("Please fill out all fields");
       setIsLoading(false);
-    }, 1000);
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+          },
+        },
+      });
+      
+      if (error) throw error;
+
+      toast.success("Account created successfully!");
+      navigate("/profile-setup");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create account");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

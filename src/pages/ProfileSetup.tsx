@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,11 +10,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 
 const ProfileSetup = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
-  const [progress, setProgress] = useState(25);
+  const [progress, setProgress] = useState(20);
   
   // Profile form data
   const [name, setName] = useState("");
@@ -22,7 +24,83 @@ const ProfileSetup = () => {
   const [experience, setExperience] = useState<string | undefined>();
   const [riskTolerance, setRiskTolerance] = useState(50); // Slider value 0-100
   const [investmentGoals, setInvestmentGoals] = useState<string[]>([]);
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
+  const [availableSectors, setAvailableSectors] = useState<{id: string, name: string}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>();
+
+  // Check if the user is logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error || !data.session) {
+        navigate("/login");
+        return;
+      }
+      
+      setUserId(data.session.user.id);
+      
+      // Check if profile is already completed
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.session.user.id)
+        .single();
+        
+      if (!profileError && profileData && profileData.profile_completed) {
+        navigate("/home");
+        return;
+      }
+      
+      // Pre-fill form with existing data if available
+      if (profileData) {
+        if (profileData.name) setName(profileData.name);
+        if (profileData.age) setAge(profileData.age.toString());
+        if (profileData.experience) setExperience(profileData.experience);
+        if (profileData.risk_tolerance) {
+          // Convert risk_tolerance text to slider value
+          if (profileData.risk_tolerance === "Low") setRiskTolerance(25);
+          else if (profileData.risk_tolerance === "Medium") setRiskTolerance(50);
+          else if (profileData.risk_tolerance === "High") setRiskTolerance(75);
+        }
+        if (profileData.investment_goals) setInvestmentGoals(profileData.investment_goals);
+      }
+      
+      // Get user sectors if available
+      const { data: sectorData, error: sectorError } = await supabase
+        .from('user_sectors')
+        .select('sector')
+        .eq('user_id', data.session.user.id);
+        
+      if (!sectorError && sectorData && sectorData.length > 0) {
+        setSelectedSectors(sectorData.map(s => s.sector));
+      }
+    };
+    
+    checkUser();
+  }, [navigate]);
+  
+  // Fetch available sectors
+  useEffect(() => {
+    const fetchSectors = async () => {
+      const { data, error } = await supabase
+        .from('sectors')
+        .select('id, name')
+        .order('name');
+        
+      if (error) {
+        console.error("Error fetching sectors:", error);
+        return;
+      }
+      
+      if (data) {
+        setAvailableSectors(data);
+      }
+    };
+    
+    fetchSectors();
+  }, []);
 
   const handleNextStep = () => {
     if (currentStep === 1 && (!name || !age)) {
@@ -34,19 +112,19 @@ const ProfileSetup = () => {
       toast.error("Please select your experience level");
       return;
     }
-
-    if (currentStep === 4) {
+    
+    if (currentStep === 5) {
       handleSubmitProfile();
       return;
     }
 
     setCurrentStep(currentStep + 1);
-    setProgress((currentStep + 1) * 25);
+    setProgress((currentStep + 1) * 20);
   };
 
   const handlePreviousStep = () => {
     setCurrentStep(currentStep - 1);
-    setProgress((currentStep - 1) * 25);
+    setProgress((currentStep - 1) * 20);
   };
 
   const handleInvestmentGoalToggle = (goal: string) => {
@@ -56,29 +134,72 @@ const ProfileSetup = () => {
       setInvestmentGoals([...investmentGoals, goal]);
     }
   };
+  
+  const handleSectorToggle = (sector: string) => {
+    if (selectedSectors.includes(sector)) {
+      setSelectedSectors(selectedSectors.filter(s => s !== sector));
+    } else {
+      setSelectedSectors([...selectedSectors, sector]);
+    }
+  };
 
-  const handleSubmitProfile = () => {
+  const handleSubmitProfile = async () => {
+    if (!userId) {
+      toast.error("User not authenticated");
+      navigate("/login");
+      return;
+    }
+    
     setIsLoading(true);
 
-    // Simulate API call to save profile
-    setTimeout(() => {
-      // Data that would be sent to your backend
-      const profileData = {
-        name,
-        age: parseInt(age),
-        experience,
-        riskTolerance: riskTolerance < 33 ? "Low" : riskTolerance < 66 ? "Medium" : "High",
-        investmentGoals,
-        points: 10000, // Initial points for new users
-        lastLoginDate: new Date().toISOString(),
-      };
-
-      console.log("Profile data to be saved:", profileData);
+    try {
+      // Update the profile
+      const riskToleranceText = riskTolerance < 33 ? "Low" : riskTolerance < 66 ? "Medium" : "High";
+      
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          name,
+          age: parseInt(age),
+          experience,
+          risk_tolerance: riskToleranceText,
+          investment_goals: investmentGoals,
+          profile_completed: true,
+          last_login_date: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+        
+      if (profileError) throw profileError;
+      
+      // Delete existing user sectors and add new ones
+      await supabase
+        .from('user_sectors')
+        .delete()
+        .eq('user_id', userId);
+        
+      // Only insert sectors if any are selected
+      if (selectedSectors.length > 0) {
+        const sectorsToInsert = selectedSectors.map(sector => ({
+          user_id: userId,
+          sector
+        }));
+        
+        const { error: sectorError } = await supabase
+          .from('user_sectors')
+          .insert(sectorsToInsert);
+          
+        if (sectorError) throw sectorError;
+      }
       
       toast.success("Profile setup complete! Welcome to LearnStocks");
       navigate("/home");
+    } catch (error: any) {
+      console.error("Error saving profile:", error);
+      toast.error(error.message || "Failed to save profile");
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -153,7 +274,7 @@ const ProfileSetup = () => {
                 
                 <div className="space-y-4">
                   <Slider
-                    defaultValue={[50]}
+                    defaultValue={[riskTolerance]}
                     max={100}
                     step={1}
                     value={[riskTolerance]}
@@ -219,6 +340,38 @@ const ProfileSetup = () => {
               </div>
             </div>
           )}
+          
+          {currentStep === 5 && (
+            <div className="space-y-4">
+              <h3 className="font-medium text-lg mb-3">Sectors of Interest</h3>
+              <p className="text-gray-500 mb-4">Select sectors you're interested in investing</p>
+              
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedSectors.length > 0 ? (
+                  selectedSectors.map((sector) => (
+                    <Badge key={sector} variant="secondary" className="cursor-pointer" onClick={() => handleSectorToggle(sector)}>
+                      {sector} ✕
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No sectors selected</p>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {availableSectors.map((sector) => (
+                  <div key={sector.id} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`sector-${sector.id}`} 
+                      checked={selectedSectors.includes(sector.name)} 
+                      onCheckedChange={() => handleSectorToggle(sector.name)} 
+                    />
+                    <Label htmlFor={`sector-${sector.id}`} className="font-normal">{sector.name}</Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
         
         <CardFooter className="flex justify-between">
@@ -234,7 +387,7 @@ const ProfileSetup = () => {
             className="bg-learngreen-600 hover:bg-learngreen-700"
             disabled={isLoading}
           >
-            {currentStep === 4 
+            {currentStep === 5 
               ? (isLoading ? "Setting Up Your Account..." : "Complete Setup")
               : "Continue"}
           </Button>
