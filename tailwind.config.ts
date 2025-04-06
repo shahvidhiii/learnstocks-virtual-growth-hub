@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,19 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// LearnStocks custom colors
+				learngreen: {
+					50: '#f2f8f2',
+					100: '#e8f5e9',
+					200: '#c8e6c9',
+					300: '#a5d6a7',
+					400: '#81c784',
+					500: '#4caf50',
+					600: '#43a047',
+					700: '#388e3c',
+					800: '#2e7d32',
+					900: '#1b5e20',
 				}
 			},
 			borderRadius: {
@@ -84,11 +98,16 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-green': {
+					'0%, 100%': { backgroundColor: 'rgba(76, 175, 80, 0.1)' },
+					'50%': { backgroundColor: 'rgba(76, 175, 80, 0.3)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-green': 'pulse-green 2s infinite'
 			}
 		}
 	},
