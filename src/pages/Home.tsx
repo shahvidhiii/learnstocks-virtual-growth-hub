@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +9,10 @@ import { PortfolioChart } from "@/components/PortfolioChart";
 import LoginReward from "@/components/LoginReward";
 import { Stock, Portfolio } from "@/types";
 import { Coins, Briefcase, ArrowUp, ArrowDown } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
-// Mock data
 const mockPortfolio: Portfolio = {
   userId: "user1",
   cash: 5000,
@@ -116,44 +117,76 @@ const mockStocks: Stock[] = [
 const Home = () => {
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [lastLoginDate, setLastLoginDate] = useState<string | null>(null);
-  const [userPoints, setUserPoints] = useState(10000);
+  const [userPoints, setUserPoints] = useState(0);
   const [portfolio, setPortfolio] = useState<Portfolio>(mockPortfolio);
   const [trendingStocks, setTrendingStocks] = useState<Stock[]>(mockStocks);
   const [selectedTab, setSelectedTab] = useState("portfolio");
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  
+  const fetchUserData = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('points, last_login_date, profile_completed')
+        .eq('id', user.id)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching user data:", error);
+        toast.error("Failed to load your profile data");
+        return;
+      }
+      
+      if (data) {
+        setUserPoints(data.points || 10000);
+        setLastLoginDate(data.last_login_date);
+        setIsFirstLogin(!data.profile_completed);
+      }
+    } catch (err) {
+      console.error("Error in fetchUserData:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   useEffect(() => {
-    // Check if this is the first login ever
-    const hasLoggedInBefore = localStorage.getItem("hasLoggedInBefore");
+    fetchUserData();
     
-    if (!hasLoggedInBefore) {
-      // First time login
-      setIsFirstLogin(true);
-      localStorage.setItem("hasLoggedInBefore", "true");
-    } else {
-      setIsFirstLogin(false);
+    if (user) {
+      const pointsChannel = supabase
+        .channel('profile-changes')
+        .on('postgres_changes', 
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${user.id}`
+          }, 
+          (payload) => {
+            if (payload.new && payload.new.points) {
+              setUserPoints(payload.new.points);
+            }
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(pointsChannel);
+      };
     }
-    
-    // Get the last login date
-    const storedLastLoginDate = localStorage.getItem("lastLoginDate");
-    setLastLoginDate(storedLastLoginDate);
-    
-    // Update last login date to today
-    const today = new Date().toISOString();
-    localStorage.setItem("lastLoginDate", today);
-    
-    // Simulate fetching portfolio data
-    // In a real app, this would be an API call
-  }, []);
+  }, [user]);
   
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       
-      {/* Login reward popup */}
       <LoginReward isFirstLogin={isFirstLogin} lastLoginDate={lastLoginDate} />
       
       <main className="container mx-auto px-4 py-6">
-        {/* User points info */}
         <div className="mb-6 bg-white rounded-lg shadow p-4 flex justify-between items-center">
           <div className="flex items-center">
             <div className="bg-learngreen-100 p-3 rounded-full mr-4">
@@ -161,13 +194,12 @@ const Home = () => {
             </div>
             <div>
               <h2 className="text-xl font-semibold">Your Balance</h2>
-              <p className="text-3xl font-bold text-learngreen-700">₹{userPoints.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-learngreen-700">{isLoading ? "Loading..." : `₹${userPoints.toLocaleString()}`}</p>
             </div>
           </div>
           <Button className="bg-learngreen-600 hover:bg-learngreen-700">Add More Points</Button>
         </div>
         
-        {/* Portfolio & Trading Tabs */}
         <div className="mb-6">
           <Tabs 
             value={selectedTab} 
@@ -180,7 +212,6 @@ const Home = () => {
             </TabsList>
             
             <TabsContent value="portfolio" className="space-y-6">
-              {/* Portfolio Summary */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <PortfolioChart
                   title="Portfolio Value"
@@ -212,7 +243,6 @@ const Home = () => {
                 </Card>
               </div>
               
-              {/* Holdings List */}
               <Card>
                 <CardHeader>
                   <CardTitle>Your Holdings</CardTitle>
@@ -253,7 +283,6 @@ const Home = () => {
             </TabsContent>
             
             <TabsContent value="trading" className="space-y-6">
-              {/* Trading Section */}
               <Card>
                 <CardHeader>
                   <CardTitle>Stock Market</CardTitle>
@@ -272,7 +301,6 @@ const Home = () => {
                           stock={stock}
                           onSelect={(stock) => {
                             console.log("Selected stock:", stock);
-                            // Would open trade dialog
                           }}
                         />
                       ))}
@@ -281,7 +309,6 @@ const Home = () => {
                 </CardContent>
               </Card>
               
-              {/* Recent Trades */}
               <Card>
                 <CardHeader>
                   <CardTitle>Recent Trades</CardTitle>

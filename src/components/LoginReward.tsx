@@ -11,6 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Coins } from "lucide-react";
 import confetti from "canvas-confetti";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface LoginRewardProps {
   isFirstLogin: boolean;
@@ -20,10 +23,14 @@ interface LoginRewardProps {
 const LoginReward = ({ isFirstLogin, lastLoginDate }: LoginRewardProps) => {
   const [showReward, setShowReward] = useState(false);
   const [rewardAmount, setRewardAmount] = useState(0);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { user } = useAuth();
   
   useEffect(() => {
     // Check if user should get a login reward
     const checkLoginReward = () => {
+      if (!user) return; // Don't show rewards if not logged in
+      
       if (isFirstLogin) {
         setRewardAmount(10000);
         setShowReward(true);
@@ -50,23 +57,47 @@ const LoginReward = ({ isFirstLogin, lastLoginDate }: LoginRewardProps) => {
     setTimeout(() => {
       checkLoginReward();
     }, 1000);
-  }, [isFirstLogin, lastLoginDate]);
+  }, [isFirstLogin, lastLoginDate, user]);
   
-  const handleClaimReward = () => {
-    // Trigger confetti animation
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
+  const handleClaimReward = async () => {
+    if (!user || isUpdating) return;
     
-    // Close dialog after a delay
-    setTimeout(() => {
-      setShowReward(false);
-    }, 2000);
-    
-    // Here you'd update the user's points in a real app
-    // updateUserPoints(rewardAmount);
+    try {
+      setIsUpdating(true);
+      
+      // Trigger confetti animation
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      
+      // Update user's points in the database
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          points: supabase.rpc('increment_points', { amount: rewardAmount })
+        })
+        .eq('id', user.id);
+      
+      if (error) {
+        console.error("Error updating points:", error);
+        toast.error("Failed to update points. Please try again.");
+        return;
+      }
+      
+      toast.success(`${rewardAmount} points added to your account!`);
+      
+      // Close dialog after a delay
+      setTimeout(() => {
+        setShowReward(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Error in handleClaimReward:", err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   return (
@@ -101,8 +132,9 @@ const LoginReward = ({ isFirstLogin, lastLoginDate }: LoginRewardProps) => {
           <Button 
             onClick={handleClaimReward} 
             className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+            disabled={isUpdating}
           >
-            Claim Reward
+            {isUpdating ? "Processing..." : "Claim Reward"}
           </Button>
         </DialogFooter>
       </DialogContent>

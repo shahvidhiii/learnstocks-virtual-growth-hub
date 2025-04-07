@@ -8,6 +8,9 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Quiz, QuizQuestion } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface StockQuizProps {
   quiz: Quiz;
@@ -20,6 +23,8 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
   const [quizCompleted, setQuizCompleted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth();
   
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
@@ -47,12 +52,41 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
       setAnsweredCorrectly(null);
     } else {
       setQuizCompleted(true);
-      onComplete(score + (answeredCorrectly ? 1 : 0));
+      processQuizCompletion(score + (answeredCorrectly ? 1 : 0));
     }
   };
   
-  const calculateFinalScore = () => {
-    const totalScore = score + (answeredCorrectly ? 1 : 0);
+  const processQuizCompletion = async (finalScore: number) => {
+    const calculatedScore = calculateFinalScore(finalScore);
+    setIsProcessing(true);
+    
+    try {
+      // Update the user's points in the database
+      if (user) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            points: supabase.rpc('increment_points', { amount: calculatedScore.points })
+          })
+          .eq('id', user.id);
+          
+        if (error) {
+          console.error("Error updating points:", error);
+          toast.error("Failed to add points to your account");
+        } else {
+          toast.success(`${calculatedScore.points} points added to your account!`);
+        }
+      }
+    } catch (err) {
+      console.error("Error processing quiz completion:", err);
+      toast.error("Failed to process quiz results");
+    } finally {
+      setIsProcessing(false);
+      onComplete(finalScore);
+    }
+  };
+  
+  const calculateFinalScore = (totalScore: number) => {
     const percentage = (totalScore / quiz.questions.length) * 100;
     return {
       correct: totalScore,
@@ -152,16 +186,16 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
             <div className="text-center space-y-4">
               <div className="mb-4">
                 <div className="text-6xl font-bold text-learngreen-600 mb-2">
-                  {calculateFinalScore().percentage}%
+                  {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).percentage}%
                 </div>
                 <p className="text-xl">
-                  You got {calculateFinalScore().correct} out of {calculateFinalScore().total} questions right
+                  You got {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).correct} out of {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).total} questions right
                 </p>
               </div>
               
               <div className="p-4 bg-learngreen-50 rounded-md">
                 <p className="font-medium text-learngreen-700">
-                  You earned {calculateFinalScore().points} points!
+                  You earned {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).points} points!
                 </p>
               </div>
             </div>
@@ -172,12 +206,14 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
               onClick={() => window.location.reload()}
               variant="outline"
               className="mr-2"
+              disabled={isProcessing}
             >
               Try Again
             </Button>
             <Button
               className="bg-learngreen-600 hover:bg-learngreen-700"
               onClick={() => window.location.href = '/games'}
+              disabled={isProcessing}
             >
               Back to Games
             </Button>
