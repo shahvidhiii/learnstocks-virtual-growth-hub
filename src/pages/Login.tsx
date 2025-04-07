@@ -16,19 +16,27 @@ const Login = () => {
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showResendEmail, setShowResendEmail] = useState(false);
+  const [activeTab, setActiveTab] = useState("login");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email || !password) {
+      toast.error("Please enter both email and password");
+      return;
+    }
+    
     setIsLoading(true);
     setShowResendEmail(false);
     
     try {
+      console.log("Starting login attempt...");
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
       if (error) {
+        console.error("Login error:", error.message);
         if (error.message.includes("Email not confirmed")) {
           setShowResendEmail(true);
           throw new Error("Email not confirmed. Please check your inbox or click resend email.");
@@ -36,14 +44,26 @@ const Login = () => {
         throw error;
       }
 
+      if (!data.user) {
+        throw new Error("No user returned from login");
+      }
+
+      console.log("Login successful, user:", data.user.id);
       toast.success("Login successful!");
       
       // Check if the user has completed profile setup
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('profile_completed')
         .eq('id', data.user.id)
         .single();
+        
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        // Continue with redirect to home as fallback
+        navigate("/home");
+        return;
+      }
         
       if (profileData?.profile_completed) {
         navigate("/home");
@@ -51,6 +71,7 @@ const Login = () => {
         navigate("/profile-setup");
       }
     } catch (error: any) {
+      console.error("Login process error:", error);
       toast.error(error.message || "Failed to login");
     } finally {
       setIsLoading(false);
@@ -81,6 +102,7 @@ const Login = () => {
       if (error) throw error;
 
       toast.success("Account created! Check your email to confirm your account.");
+      setActiveTab("login");
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
     } finally {
@@ -122,7 +144,7 @@ const Login = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="login" className="w-full">
+            <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-4">
                 <TabsTrigger value="login">Login</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -139,6 +161,7 @@ const Login = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required 
+                        disabled={isLoading}
                       />
                     </div>
                     <div className="space-y-2">
@@ -155,6 +178,7 @@ const Login = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required 
+                        disabled={isLoading}
                       />
                     </div>
                     
@@ -194,6 +218,7 @@ const Login = () => {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required 
+                        disabled={isLoading}
                       />
                     </div>
                     <div className="space-y-2">
@@ -205,6 +230,7 @@ const Login = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required 
+                        disabled={isLoading}
                       />
                     </div>
                     <div className="space-y-2">
@@ -216,6 +242,7 @@ const Login = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required 
+                        disabled={isLoading}
                       />
                     </div>
                     <Button 

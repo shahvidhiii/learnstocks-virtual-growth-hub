@@ -40,22 +40,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const refreshToken = searchParams.get('refresh_token');
           const type = searchParams.get('type');
           
-          if (accessToken && type === 'recovery') {
+          console.log("Found access token in URL, type:", type);
+          
+          if (accessToken) {
+            // Set the session directly with the tokens from the URL
             await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken || '',
             });
-            // Redirect to the home page after setting the session
-            navigate('/home');
-            toast.success("Email confirmed successfully!");
-          } else if (accessToken) {
-            // Regular sign-in with access token
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || '',
-            });
-            navigate('/home');
-            toast.success("Email confirmed successfully!");
+            
+            if (type === 'recovery') {
+              navigate('/reset-password');
+              toast.success("Please set a new password");
+            } else {
+              navigate('/home');
+              toast.success("Email confirmed successfully!");
+            }
           }
         } catch (error) {
           console.error("Error handling email confirmation:", error);
@@ -66,24 +66,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     handleEmailConfirmation();
 
-    // Set up auth state listener first
+    // Set up auth state listener first (avoiding deadlocks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         console.log("Auth event:", event);
+        
+        // Synchronous state updates
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setLoading(false);
         
-        // Update last login date when session is refreshed or established
+        // Use setTimeout to avoid potential deadlocks with Supabase auth
         if (newSession?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({ last_login_date: new Date().toISOString() })
-              .eq('id', newSession.user.id);
-          } catch (error) {
-            console.error("Error updating last login date:", error);
-          }
+          setTimeout(async () => {
+            try {
+              await supabase
+                .from('profiles')
+                .update({ last_login_date: new Date().toISOString() })
+                .eq('id', newSession.user.id);
+            } catch (error) {
+              console.error("Error updating last login date:", error);
+            }
+          }, 0);
         }
       }
     );
@@ -100,12 +104,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signOut = async () => {
     try {
+      setLoading(true);
       await supabase.auth.signOut();
       toast.success("Logged out successfully");
       navigate("/login");
     } catch (error) {
       console.error("Error signing out:", error);
       toast.error("Failed to log out");
+    } finally {
+      setLoading(false);
     }
   };
 
