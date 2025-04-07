@@ -28,6 +28,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Handle access_token in URL (for email confirmations)
+    const handleEmailConfirmation = async () => {
+      const url = window.location.href;
+      if (url.includes('#access_token=')) {
+        try {
+          // Extract the hash portion and convert it to a search string format
+          const hash = url.split('#')[1];
+          const searchParams = new URLSearchParams(hash);
+          const accessToken = searchParams.get('access_token');
+          const refreshToken = searchParams.get('refresh_token');
+          const type = searchParams.get('type');
+          
+          if (accessToken && type === 'recovery') {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+            // Redirect to the home page after setting the session
+            navigate('/home');
+            toast.success("Email confirmed successfully!");
+          } else if (accessToken) {
+            // Regular sign-in with access token
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+            navigate('/home');
+            toast.success("Email confirmed successfully!");
+          }
+        } catch (error) {
+          console.error("Error handling email confirmation:", error);
+          toast.error("There was an error confirming your email. Please try again.");
+        }
+      }
+    };
+
+    handleEmailConfirmation();
+
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
@@ -58,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const signOut = async () => {
     try {

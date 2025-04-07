@@ -1,207 +1,157 @@
 
-import NavigationBar from "@/components/NavigationBar";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { PieChart, BookOpen, Medal, Calendar, PiggyBank, ArrowRight, Landmark, FileText } from "lucide-react";
+import React from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { ChevronRight, LogOut, UserCircle, Settings, HelpCircle, Info, CreditCard, Heart, Shield, Bell } from "lucide-react";
 import { Link } from "react-router-dom";
-import { cn } from "@/lib/utils";
 
 const More = () => {
-  const categories = [
-    {
-      title: "Portfolio Diversification",
-      description: "Explore alternative investment options beyond stocks",
-      href: "/diversification",
-      icon: PieChart,
-      color: "bg-blue-100 text-blue-600",
-      items: [
-        { name: "Fixed Deposits", href: "/diversification/fd" },
-        { name: "Gold Investments", href: "/diversification/gold" },
-        { name: "IPOs", href: "/diversification/ipo" },
-        { name: "Bonds & NCDs", href: "/diversification/bonds" },
-      ]
-    },
-    {
-      title: "Learning & Knowledge",
-      description: "Educational resources to improve your investment skills",
-      href: "/learning",
-      icon: BookOpen,
-      color: "bg-purple-100 text-purple-600",
-      items: [
-        { name: "Courses", href: "/learning/courses" },
-        { name: "Webinars", href: "/learning/webinars" },
-        { name: "Market Glossary", href: "/learning/glossary" },
-        { name: "Investment Strategies", href: "/learning/strategies" },
-      ]
-    },
-    {
-      title: "Achievements",
-      description: "Track your progress and unlock rewards",
-      href: "/achievements",
-      icon: Medal,
-      color: "bg-amber-100 text-amber-600",
-      items: [
-        { name: "Badges", href: "/achievements/badges" },
-        { name: "Leaderboard", href: "/achievements/leaderboard" },
-        { name: "Challenges", href: "/achievements/challenges" },
-        { name: "Rewards", href: "/achievements/rewards" },
-      ]
-    },
-    {
-      title: "Events",
-      description: "Join upcoming financial events and webinars",
-      href: "/events",
-      icon: Calendar,
-      color: "bg-green-100 text-green-600",
-      items: [
-        { name: "Upcoming Webinars", href: "/events/webinars" },
-        { name: "Challenges", href: "/events/challenges" },
-        { name: "Live Sessions", href: "/events/live" },
-      ]
-    },
-  ];
-
-  const featuredResources = [
-    {
-      title: "Introduction to Bonds",
-      description: "Learn about government and corporate bonds",
-      type: "Course",
-      duration: "30 mins",
-      image: "https://placehold.co/300x200/f0f4f8/a0aec0?text=Bonds+101"
-    },
-    {
-      title: "Gold Investment Guide",
-      description: "Different ways to invest in gold",
-      type: "Guide",
-      duration: "15 mins",
-      image: "https://placehold.co/300x200/fff9e6/e6b400?text=Gold+Guide"
-    },
-    {
-      title: "Understanding IPOs",
-      description: "How to evaluate and invest in IPOs",
-      type: "Webinar",
-      duration: "45 mins",
-      image: "https://placehold.co/300x200/e6f7ff/0099ff?text=IPO+Guide"
-    },
-  ];
-
+  const { user, signOut } = useAuth();
+  
+  const handleSignOut = async () => {
+    await signOut();
+  };
+  
   return (
-    <div className="min-h-screen bg-gray-50">
-      <NavigationBar />
+    <div className="container mx-auto px-4 py-8 max-w-md">
+      <h1 className="text-2xl font-bold mb-6">Profile & Settings</h1>
       
-      <main className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">More Options</h1>
-        
-        {/* Categories Grid */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {categories.map((category) => (
-            <Card key={category.title} className="overflow-hidden">
-              <CardHeader>
-                <div className="flex items-start">
-                  <div className={cn("p-3 rounded-lg mr-4", category.color)}>
-                    <category.icon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <CardTitle>{category.title}</CardTitle>
-                    <CardDescription>{category.description}</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <ul className="grid grid-cols-2 gap-2">
-                  {category.items.map((item) => (
-                    <li key={item.name}>
-                      <Link 
-                        to={item.href} 
-                        className="flex items-center p-2 rounded-md hover:bg-gray-100 transition-colors"
-                      >
-                        <ArrowRight className="h-4 w-4 mr-2 text-gray-500" />
-                        <span>{item.name}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              
-              <CardFooter className="bg-gray-50 border-t">
-                <Link 
-                  to={category.href}
-                  className="w-full text-center text-sm font-medium text-learngreen-600 hover:text-learngreen-700"
-                >
-                  View All Options
-                </Link>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-        
-        {/* Featured Resources */}
-        <h2 className="text-xl font-semibold mb-4">Featured Resources</h2>
-        
-        <div className="grid md:grid-cols-3 gap-4 mb-8">
-          {featuredResources.map((resource) => (
-            <Card key={resource.title} className="overflow-hidden">
-              <img 
-                src={resource.image} 
-                alt={resource.title} 
-                className="w-full h-40 object-cover"
-              />
-              <CardContent className="pt-4">
-                <div className="flex items-center mb-2">
-                  <Badge className="bg-learngreen-100 text-learngreen-700 mr-2">
-                    {resource.type}
-                  </Badge>
-                  <span className="text-xs text-gray-500">{resource.duration}</span>
-                </div>
-                <h3 className="font-semibold mb-1">{resource.title}</h3>
-                <p className="text-sm text-gray-600">{resource.description}</p>
-              </CardContent>
-              <CardFooter className="pt-0">
-                <Link 
-                  to="#"
-                  className="text-sm font-medium text-learngreen-600 hover:text-learngreen-700 flex items-center"
-                >
-                  Start Learning
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Link>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-        
-        {/* Quick Links */}
-        <h2 className="text-xl font-semibold mb-4">Quick Links</h2>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Link to="/diversification/fd" className="p-4 bg-white border rounded-lg hover:shadow-md transition-shadow flex flex-col items-center text-center">
-            <div className="bg-blue-100 p-3 rounded-full mb-2">
-              <Landmark className="h-6 w-6 text-blue-600" />
+      {/* User Profile Card */}
+      <Card className="mb-8">
+        <CardContent className="pt-6">
+          <div className="flex items-center">
+            <Avatar className="h-16 w-16 mr-4">
+              <UserCircle className="h-16 w-16 text-gray-400" />
+            </Avatar>
+            <div>
+              <h2 className="text-xl font-semibold">{user?.user_metadata?.full_name || "User"}</h2>
+              <p className="text-sm text-gray-500">{user?.email}</p>
             </div>
-            <span className="font-medium">Fixed Deposits</span>
-          </Link>
+          </div>
+          <div className="mt-4">
+            <Link to="/profile" className="w-full">
+              <Button variant="outline" className="w-full justify-between">
+                Edit Profile
+                <ChevronRight size={18} />
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Account Settings */}
+      <h2 className="text-lg font-semibold mb-3">Account Settings</h2>
+      <Card className="mb-8">
+        <CardContent className="p-0">
+          <div className="divide-y">
+            <Link to="/settings/personal" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <UserCircle className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Personal Information</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/settings/account" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <Settings className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Account Settings</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/settings/notifications" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <Bell className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Notification Preferences</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/settings/privacy" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <Shield className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Privacy & Security</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* App Information */}
+      <h2 className="text-lg font-semibold mb-3">App Information</h2>
+      <Card className="mb-8">
+        <CardContent className="p-0">
+          <div className="divide-y">
+            <Link to="/help" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <HelpCircle className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Help & Support</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/about" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <Info className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>About LearnStocks</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/terms" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <CreditCard className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Terms & Conditions</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+            
+            <Link to="/feedback" className="flex items-center justify-between p-4 hover:bg-gray-50">
+              <div className="flex items-center">
+                <Heart className="h-5 w-5 mr-3 text-learngreen-600" />
+                <span>Give Feedback</span>
+              </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Achievements Section */}
+      <h2 className="text-lg font-semibold mb-3">Your Achievements</h2>
+      <Card className="mb-8">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-medium">Trading Level</span>
+            <span className="px-2 py-1 bg-learngreen-100 text-learngreen-700 rounded-full text-sm">Level 3</span>
+          </div>
           
-          <Link to="/diversification/gold" className="p-4 bg-white border rounded-lg hover:shadow-md transition-shadow flex flex-col items-center text-center">
-            <div className="bg-amber-100 p-3 rounded-full mb-2">
-              <PiggyBank className="h-6 w-6 text-amber-600" />
-            </div>
-            <span className="font-medium">Gold Investments</span>
-          </Link>
-          
-          <Link to="/diversification/ipo" className="p-4 bg-white border rounded-lg hover:shadow-md transition-shadow flex flex-col items-center text-center">
-            <div className="bg-green-100 p-3 rounded-full mb-2">
-              <FileText className="h-6 w-6 text-green-600" />
-            </div>
-            <span className="font-medium">IPOs</span>
-          </Link>
-          
-          <Link to="/diversification/bonds" className="p-4 bg-white border rounded-lg hover:shadow-md transition-shadow flex flex-col items-center text-center">
-            <div className="bg-purple-100 p-3 rounded-full mb-2">
-              <BookOpen className="h-6 w-6 text-purple-600" />
-            </div>
-            <span className="font-medium">Bonds & NCDs</span>
-          </Link>
-        </div>
-      </main>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Learning Progress</span>
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">42% Complete</span>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Sign Out Button */}
+      <Button 
+        variant="destructive" 
+        className="w-full mb-8" 
+        onClick={handleSignOut}
+      >
+        <LogOut className="mr-2 h-4 w-4" />
+        Sign Out
+      </Button>
+      
+      {/* App version */}
+      <p className="text-center text-gray-500 text-sm">
+        LearnStocks v1.0.0
+      </p>
     </div>
   );
 };
