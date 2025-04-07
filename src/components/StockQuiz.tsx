@@ -61,14 +61,11 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
     setIsProcessing(true);
     
     try {
-      // Update the user's points in the database
+      // Update the user's points in the database using the RPC function
       if (user) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            points: supabase.rpc('increment_points', { amount: calculatedScore.points })
-          })
-          .eq('id', user.id);
+        const { data, error } = await supabase.rpc('increment_points', {
+          amount: calculatedScore.points
+        });
           
         if (error) {
           console.error("Error updating points:", error);

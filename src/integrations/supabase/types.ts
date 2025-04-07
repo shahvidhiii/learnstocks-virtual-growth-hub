@@ -98,7 +98,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_increment_points_function: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      function_exists: {
+        Args: { function_name: string }
+        Returns: boolean
+      }
+      increment_points: {
+        Args: { amount: number }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

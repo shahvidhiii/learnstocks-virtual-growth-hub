@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -124,7 +125,8 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   
-  const fetchUserData = async () => {
+  // Create a fetchUserData function that can be called whenever we need updated data
+  const fetchUserData = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -151,12 +153,14 @@ const Home = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
   
   useEffect(() => {
+    // Fetch user data when component mounts
     fetchUserData();
     
     if (user) {
+      // Listen for real-time changes to the user's profile
       const pointsChannel = supabase
         .channel('profile-changes')
         .on('postgres_changes', 
@@ -167,8 +171,9 @@ const Home = () => {
             filter: `id=eq.${user.id}`
           }, 
           (payload) => {
-            if (payload.new && payload.new.points) {
-              setUserPoints(payload.new.points);
+            if (payload.new && payload.new.points !== undefined) {
+              // Update the points in the UI when they change in the database
+              setUserPoints(payload.new.points || 0);
             }
           }
         )
@@ -178,13 +183,16 @@ const Home = () => {
         supabase.removeChannel(pointsChannel);
       };
     }
-  }, [user]);
+  }, [user, fetchUserData]);
   
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       
-      <LoginReward isFirstLogin={isFirstLogin} lastLoginDate={lastLoginDate} />
+      <LoginReward 
+        isFirstLogin={isFirstLogin} 
+        lastLoginDate={lastLoginDate} 
+      />
       
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6 bg-white rounded-lg shadow p-4 flex justify-between items-center">

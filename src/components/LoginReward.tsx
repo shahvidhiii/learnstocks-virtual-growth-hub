@@ -72,13 +72,10 @@ const LoginReward = ({ isFirstLogin, lastLoginDate }: LoginRewardProps) => {
         origin: { y: 0.6 }
       });
       
-      // Update user's points in the database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          points: supabase.rpc('increment_points', { amount: rewardAmount })
-        })
-        .eq('id', user.id);
+      // Call the increment_points RPC function to add points
+      const { data, error } = await supabase.rpc('increment_points', {
+        amount: rewardAmount
+      });
       
       if (error) {
         console.error("Error updating points:", error);
