@@ -15,10 +15,12 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showResendEmail, setShowResendEmail] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setShowResendEmail(false);
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -26,22 +28,24 @@ const Login = () => {
         password,
       });
       
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          setShowResendEmail(true);
+          throw new Error("Email not confirmed. Please check your inbox or click resend email.");
+        }
+        throw error;
+      }
 
       toast.success("Login successful!");
       
       // Check if the user has completed profile setup
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData } = await supabase
         .from('profiles')
         .select('profile_completed')
         .eq('id', data.user.id)
         .single();
         
-      if (profileError) {
-        console.error("Error fetching profile:", profileError);
-      }
-      
-      if (profileData && profileData.profile_completed) {
+      if (profileData?.profile_completed) {
         navigate("/home");
       } else {
         navigate("/profile-setup");
@@ -76,10 +80,28 @@ const Login = () => {
       
       if (error) throw error;
 
-      toast.success("Account created successfully!");
-      navigate("/profile-setup");
+      toast.success("Account created! Check your email to confirm your account.");
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    setIsLoading(true);
+    
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+      
+      if (error) throw error;
+      
+      toast.success("Verification email resent! Please check your inbox.");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to resend email");
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +157,22 @@ const Login = () => {
                         required 
                       />
                     </div>
+                    
+                    {showResendEmail && (
+                      <div className="py-2">
+                        <p className="text-sm text-amber-600 mb-2">Your email hasn't been verified yet.</p>
+                        <Button 
+                          type="button"
+                          variant="outline" 
+                          onClick={handleResendEmail}
+                          className="w-full"
+                          disabled={isLoading}
+                        >
+                          Resend Verification Email
+                        </Button>
+                      </div>
+                    )}
+                    
                     <Button 
                       type="submit" 
                       className="w-full bg-learngreen-600 hover:bg-learngreen-700" 
