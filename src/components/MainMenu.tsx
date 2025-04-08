@@ -24,63 +24,55 @@ const MainMenu = () => {
           <NavigationMenuContent>
             <ul className="grid w-[320px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
               <li>
-                <Link to="/diversification">
-                  <NavigationMenuLink className={cn(
-                    "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
-                  )}>
-                    <div className="flex items-center">
-                      <PieChart className="h-4 w-4 mr-2 text-learngreen-600" />
-                      <div className="text-sm font-medium">Portfolio Diversification</div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      FDs, Gold, IPOs, NCDs, and Bonds
-                    </p>
-                  </NavigationMenuLink>
+                <Link to="/diversification" className={cn(
+                  "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
+                )}>
+                  <div className="flex items-center">
+                    <PieChart className="h-4 w-4 mr-2 text-learngreen-600" />
+                    <div className="text-sm font-medium">Portfolio Diversification</div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    FDs, Gold, IPOs, NCDs, and Bonds
+                  </p>
                 </Link>
               </li>
               <li>
-                <Link to="/learning">
-                  <NavigationMenuLink className={cn(
-                    "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
-                  )}>
-                    <div className="flex items-center">
-                      <BookOpen className="h-4 w-4 mr-2 text-learngreen-600" />
-                      <div className="text-sm font-medium">Learning & Knowledge</div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Courses and Webinars
-                    </p>
-                  </NavigationMenuLink>
+                <Link to="/learning" className={cn(
+                  "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
+                )}>
+                  <div className="flex items-center">
+                    <BookOpen className="h-4 w-4 mr-2 text-learngreen-600" />
+                    <div className="text-sm font-medium">Learning & Knowledge</div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Courses and Webinars
+                  </p>
                 </Link>
               </li>
               <li>
-                <Link to="/games">
-                  <NavigationMenuLink className={cn(
-                    "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
-                  )}>
-                    <div className="flex items-center">
-                      <Coins className="h-4 w-4 mr-2 text-learngreen-600" />
-                      <div className="text-sm font-medium">Games & Quizzes</div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Trade simulators and knowledge challenges
-                    </p>
-                  </NavigationMenuLink>
+                <Link to="/games" className={cn(
+                  "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
+                )}>
+                  <div className="flex items-center">
+                    <Coins className="h-4 w-4 mr-2 text-learngreen-600" />
+                    <div className="text-sm font-medium">Games & Quizzes</div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Trade simulators and knowledge challenges
+                  </p>
                 </Link>
               </li>
               <li>
-                <Link to="/settings">
-                  <NavigationMenuLink className={cn(
-                    "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
-                  )}>
-                    <div className="flex items-center">
-                      <Wrench className="h-4 w-4 mr-2 text-learngreen-600" />
-                      <div className="text-sm font-medium">Settings</div>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Account settings and preferences
-                    </p>
-                  </NavigationMenuLink>
+                <Link to="/settings" className={cn(
+                  "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
+                )}>
+                  <div className="flex items-center">
+                    <Wrench className="h-4 w-4 mr-2 text-learngreen-600" />
+                    <div className="text-sm font-medium">Settings</div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Account settings and preferences
+                  </p>
                 </Link>
               </li>
             </ul>
