@@ -5,12 +5,11 @@ import {
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
-import { BookOpen, ChevronDown, PieChart } from "lucide-react";
+import { BookOpen, ChevronDown, Coins, PieChart, Wrench } from "lucide-react";
 
 const MainMenu = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -23,7 +22,7 @@ const MainMenu = () => {
             LearnStocks
           </NavigationMenuTrigger>
           <NavigationMenuContent>
-            <ul className="grid w-[320px] gap-3 p-4 md:w-[400px] md:grid-cols-2">
+            <ul className="grid w-[320px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
               <li>
                 <Link to="/diversification">
                   <NavigationMenuLink className={cn(
@@ -54,17 +53,32 @@ const MainMenu = () => {
                   </NavigationMenuLink>
                 </Link>
               </li>
-              <li className="col-span-2">
-                <Link to="/more">
+              <li>
+                <Link to="/games">
                   <NavigationMenuLink className={cn(
                     "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
                   )}>
                     <div className="flex items-center">
-                      <ChevronDown className="h-4 w-4 mr-2 text-learngreen-600" />
-                      <div className="text-sm font-medium">More Options</div>
+                      <Coins className="h-4 w-4 mr-2 text-learngreen-600" />
+                      <div className="text-sm font-medium">Games & Quizzes</div>
                     </div>
                     <p className="text-xs text-gray-500">
-                      Account settings, help and more
+                      Trade simulators and knowledge challenges
+                    </p>
+                  </NavigationMenuLink>
+                </Link>
+              </li>
+              <li>
+                <Link to="/settings">
+                  <NavigationMenuLink className={cn(
+                    "block select-none space-y-1 rounded-md p-3 hover:bg-learngreen-50 hover:text-learngreen-700"
+                  )}>
+                    <div className="flex items-center">
+                      <Wrench className="h-4 w-4 mr-2 text-learngreen-600" />
+                      <div className="text-sm font-medium">Settings</div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Account settings and preferences
                     </p>
                   </NavigationMenuLink>
                 </Link>

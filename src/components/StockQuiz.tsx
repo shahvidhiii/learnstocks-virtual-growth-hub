@@ -51,8 +51,9 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
       setSelectedOption(null);
       setAnsweredCorrectly(null);
     } else {
+      const finalScore = score + (answeredCorrectly ? 1 : 0);
       setQuizCompleted(true);
-      processQuizCompletion(score + (answeredCorrectly ? 1 : 0));
+      processQuizCompletion(finalScore);
     }
   };
   

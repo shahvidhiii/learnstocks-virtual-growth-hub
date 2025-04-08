@@ -120,6 +120,7 @@ const Games = () => {
   const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
   const [completedQuizzes, setCompletedQuizzes] = useState<string[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [activeCategory, setActiveCategory] = useState<string>("quizzes");
   
   const handleStartQuiz = (quiz: Quiz) => {
     setSelectedQuiz(quiz);
@@ -146,6 +147,16 @@ const Games = () => {
       setSelectedQuiz(null);
     }, 3000);
   };
+
+  const handleOpenSimulator = () => {
+    setActiveCategory("simulator");
+    toast.info("Trading simulator loading...");
+  };
+
+  const handleOpenChallenges = () => {
+    setActiveCategory("challenges");
+    toast.info("Market challenges loading...");
+  };
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -162,7 +173,7 @@ const Games = () => {
         
         {/* Games Categories */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card>
+          <Card className={activeCategory === "quizzes" ? "border-learngreen-500 shadow-md" : ""}>
             <CardHeader className="pb-2">
               <div className="flex justify-center mb-2">
                 <div className="bg-learngreen-100 p-3 rounded-full">
@@ -180,13 +191,16 @@ const Games = () => {
               </p>
             </CardContent>
             <CardFooter className="pt-0">
-              <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700">
+              <Button 
+                className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                onClick={() => setActiveCategory("quizzes")}
+              >
                 Explore Quizzes
               </Button>
             </CardFooter>
           </Card>
           
-          <Card>
+          <Card className={activeCategory === "simulator" ? "border-learngreen-500 shadow-md" : ""}>
             <CardHeader className="pb-2">
               <div className="flex justify-center mb-2">
                 <div className="bg-learngreen-100 p-3 rounded-full">
@@ -204,13 +218,16 @@ const Games = () => {
               </p>
             </CardContent>
             <CardFooter className="pt-0">
-              <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700">
+              <Button 
+                className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                onClick={handleOpenSimulator}
+              >
                 Start Trading
               </Button>
             </CardFooter>
           </Card>
           
-          <Card>
+          <Card className={activeCategory === "challenges" ? "border-learngreen-500 shadow-md" : ""}>
             <CardHeader className="pb-2">
               <div className="flex justify-center mb-2">
                 <div className="bg-learngreen-100 p-3 rounded-full">
@@ -228,67 +245,155 @@ const Games = () => {
               </p>
             </CardContent>
             <CardFooter className="pt-0">
-              <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700">
+              <Button 
+                className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                onClick={handleOpenChallenges}
+              >
                 Join Challenge
               </Button>
             </CardFooter>
           </Card>
         </div>
         
-        {/* Available Quizzes */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Available Quizzes</h2>
-          
-          <div className="grid md:grid-cols-2 gap-4">
-            {mockQuizzes.map((quiz) => (
-              <Card key={quiz.id} className={completedQuizzes.includes(quiz.id) ? "border-learngreen-200" : ""}>
+        {/* Content based on selected category */}
+        {activeCategory === "quizzes" && (
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Available Quizzes</h2>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              {mockQuizzes.map((quiz) => (
+                <Card key={quiz.id} className={completedQuizzes.includes(quiz.id) ? "border-learngreen-200" : ""}>
+                  <CardHeader>
+                    <div className="flex justify-between">
+                      <CardTitle>{quiz.title}</CardTitle>
+                      {completedQuizzes.includes(quiz.id) && (
+                        <Badge variant="outline" className="bg-learngreen-100 text-learngreen-700 border-learngreen-200">
+                          Completed
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription>{quiz.description}</CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent>
+                    <div className="flex justify-between text-sm">
+                      <span>Questions: {quiz.questions.length}</span>
+                      <span className="font-semibold text-learngreen-700">{quiz.points} points</span>
+                    </div>
+                  </CardContent>
+                  
+                  <CardFooter>
+                    <Button 
+                      onClick={() => handleStartQuiz(quiz)}
+                      className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                    >
+                      {completedQuizzes.includes(quiz.id) ? "Play Again" : "Start Quiz"}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              ))}
+              
+              {/* Coming Soon Placeholder */}
+              <Card className="opacity-70 border-dashed">
                 <CardHeader>
-                  <div className="flex justify-between">
-                    <CardTitle>{quiz.title}</CardTitle>
-                    {completedQuizzes.includes(quiz.id) && (
-                      <Badge variant="outline" className="bg-learngreen-100 text-learngreen-700 border-learngreen-200">
-                        Completed
-                      </Badge>
-                    )}
-                  </div>
-                  <CardDescription>{quiz.description}</CardDescription>
+                  <CardTitle>More Quizzes Coming Soon</CardTitle>
+                  <CardDescription>
+                    New quizzes are added every week
+                  </CardDescription>
                 </CardHeader>
-                
-                <CardContent>
-                  <div className="flex justify-between text-sm">
-                    <span>Questions: {quiz.questions.length}</span>
-                    <span className="font-semibold text-learngreen-700">{quiz.points} points</span>
-                  </div>
+                <CardContent className="flex justify-center py-6">
+                  <GamepadIcon className="h-16 w-16 text-gray-300" />
                 </CardContent>
-                
                 <CardFooter>
-                  <Button 
-                    onClick={() => handleStartQuiz(quiz)}
-                    className="w-full bg-learngreen-600 hover:bg-learngreen-700"
-                  >
-                    {completedQuizzes.includes(quiz.id) ? "Play Again" : "Start Quiz"}
-                  </Button>
+                  <Button disabled className="w-full">Coming Soon</Button>
                 </CardFooter>
               </Card>
-            ))}
-            
-            {/* Coming Soon Placeholder */}
-            <Card className="opacity-70 border-dashed">
+            </div>
+          </div>
+        )}
+
+        {activeCategory === "simulator" && (
+          <div className="space-y-6">
+            <Card>
               <CardHeader>
-                <CardTitle>More Quizzes Coming Soon</CardTitle>
-                <CardDescription>
-                  New quizzes are added every week
-                </CardDescription>
+                <CardTitle>Trading Simulator</CardTitle>
+                <CardDescription>Practice trading with virtual money</CardDescription>
               </CardHeader>
-              <CardContent className="flex justify-center py-6">
-                <GamepadIcon className="h-16 w-16 text-gray-300" />
+              <CardContent>
+                <div className="p-6 space-y-4">
+                  <div className="bg-learngreen-50 p-4 rounded-md">
+                    <h3 className="font-semibold text-learngreen-700 mb-2">Your Portfolio</h3>
+                    <div className="flex justify-between items-center">
+                      <span>Available Balance:</span>
+                      <span className="font-bold">₹10,000</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Popular Stocks</h3>
+                    {["RELIANCE", "TCS", "HDFC", "INFY", "ICICI"].map((stock, index) => (
+                      <div key={stock} className="flex justify-between items-center p-3 border rounded-md">
+                        <span>{stock}</span>
+                        <div className="space-x-2">
+                          <Button size="sm" variant="outline" className="border-green-500 text-green-700">Buy</Button>
+                          <Button size="sm" variant="outline" className="border-red-500 text-red-700">Sell</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
               <CardFooter>
-                <Button disabled className="w-full">Coming Soon</Button>
+                <Button className="w-full bg-learngreen-600" onClick={() => toast.success("Simulator points added!")}>Complete Practice Session (+500 points)</Button>
               </CardFooter>
             </Card>
           </div>
-        </div>
+        )}
+
+        {activeCategory === "challenges" && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Market Prediction Challenge</CardTitle>
+                <CardDescription>Predict market movements in real-time</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="p-6 space-y-6">
+                  <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                    <h3 className="font-semibold text-blue-700 mb-2">Today's Challenge</h3>
+                    <p>Predict whether the following stocks will close higher or lower by the end of the trading day.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {["NIFTY50", "BANKNIFTY", "SENSEX", "RELIANCE", "TCS"].map((item, index) => (
+                      <div key={item} className="border p-4 rounded-md">
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="font-semibold">{item}</span>
+                          <span className={index % 2 === 0 ? "text-green-600" : "text-red-600"}>
+                            {index % 2 === 0 ? "+1.2%" : "-0.8%"}
+                          </span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button variant="outline" className="flex-1 border-green-500 hover:bg-green-50">
+                            Higher
+                          </Button>
+                          <Button variant="outline" className="flex-1 border-red-500 hover:bg-red-50">
+                            Lower
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full bg-learngreen-600" onClick={() => toast.success("Challenge completed! +750 points")}>
+                  Submit Predictions
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        )}
       </main>
       
       {/* Quiz Dialog */}
