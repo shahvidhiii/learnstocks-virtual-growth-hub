@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { BarChart, BookOpen, ChevronDown, GamepadIcon, Home, PieChart, Search, Settings, TrendingUp, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MainMenu from "./MainMenu";
 
 const NavigationBar = () => {
   const location = useLocation();
@@ -33,9 +34,7 @@ const NavigationBar = () => {
     <nav className="bg-white border-b border-learngreen-200 px-4 py-2.5">
       <div className="flex flex-wrap justify-between items-center">
         <div className="flex items-center">
-          <Link to="/" className="flex items-center">
-            <span className="self-center text-xl font-semibold text-learngreen-600 whitespace-nowrap">LearnStocks</span>
-          </Link>
+          <MainMenu />
         </div>
         
         <div className="flex md:hidden">
@@ -74,10 +73,12 @@ const NavigationBar = () => {
         </div>
         
         <div className="hidden md:flex items-center">
-          <Button variant="ghost" size="sm" className="text-learngreen-500">
-            <User className="h-4 w-4 mr-2" />
-            Login
-          </Button>
+          <Link to="/profile">
+            <Button variant="ghost" size="sm" className="text-learngreen-500">
+              <User className="h-4 w-4 mr-2" />
+              Profile
+            </Button>
+          </Link>
         </div>
       </div>
     </nav>

@@ -186,7 +186,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                   {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).percentage}%
                 </div>
                 <p className="text-xl">
-                  You got {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).correct} out of {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).total} questions right
+                  You got {score + (answeredCorrectly ? 1 : 0)} out of {quiz.questions.length} questions right
                 </p>
               </div>
               

@@ -15,6 +15,7 @@ import Games from "./pages/Games";
 import Predictions from "./pages/Predictions";
 import PSG from "./pages/PSG";
 import More from "./pages/More";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -55,6 +56,11 @@ const App = () => (
                 <Search />
               </ProtectedRoute>
             } />
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } />
             <Route path="/games" element={
               <ProtectedRoute>
                 <Games />
@@ -71,6 +77,21 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/more" element={
+              <ProtectedRoute>
+                <More />
+              </ProtectedRoute>
+            } />
+            <Route path="/diversification/*" element={
+              <ProtectedRoute>
+                <More />
+              </ProtectedRoute>
+            } />
+            <Route path="/learning/*" element={
+              <ProtectedRoute>
+                <More />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/*" element={
               <ProtectedRoute>
                 <More />
               </ProtectedRoute>
