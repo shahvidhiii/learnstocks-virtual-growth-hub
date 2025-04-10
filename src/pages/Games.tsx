@@ -1,5 +1,6 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import NavigationBar from "@/components/NavigationBar";
 import StockQuiz from "@/components/StockQuiz";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { GamepadIcon, Trophy, BookOpen, Brain, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Quiz } from "@/types";
+import { useBalanceStore } from "@/stores/balanceStore";
 
 // Mock quiz data
 const mockQuizzes: Quiz[] = [
@@ -116,11 +118,22 @@ const mockQuizzes: Quiz[] = [
 ];
 
 const Games = () => {
+  const location = useLocation();
+  const initialCategory = location.state?.activeTab || "quizzes";
+  
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
   const [completedQuizzes, setCompletedQuizzes] = useState<string[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
-  const [activeCategory, setActiveCategory] = useState<string>("quizzes");
+  const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
+  const { balance, addToBalance } = useBalanceStore();
+  
+  useEffect(() => {
+    // Handle incoming navigation requests
+    if (location.state?.activeTab) {
+      setActiveCategory(location.state.activeTab);
+    }
+  }, [location.state]);
   
   const handleStartQuiz = (quiz: Quiz) => {
     setSelectedQuiz(quiz);
@@ -139,6 +152,7 @@ const Games = () => {
     }
     
     setTotalPoints(totalPoints + earnedPoints);
+    addToBalance(earnedPoints); // Add to the global balance
     toast.success(`You earned ${earnedPoints} points!`);
     
     // Close dialog after a delay
@@ -156,6 +170,12 @@ const Games = () => {
   const handleOpenChallenges = () => {
     setActiveCategory("challenges");
     toast.info("Market challenges loading...");
+  };
+  
+  const handleCompleteSimulation = () => {
+    const simulationPoints = 500;
+    addToBalance(simulationPoints);
+    toast.success(`Simulation points added: ${simulationPoints}!`);
   };
   
   return (
@@ -325,7 +345,7 @@ const Games = () => {
                     <h3 className="font-semibold text-learngreen-700 mb-2">Your Portfolio</h3>
                     <div className="flex justify-between items-center">
                       <span>Available Balance:</span>
-                      <span className="font-bold">₹10,000</span>
+                      <span className="font-bold">₹{balance.toLocaleString()}</span>
                     </div>
                   </div>
                   
@@ -344,7 +364,12 @@ const Games = () => {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button className="w-full bg-learngreen-600" onClick={() => toast.success("Simulator points added!")}>Complete Practice Session (+500 points)</Button>
+                <Button 
+                  className="w-full bg-learngreen-600" 
+                  onClick={handleCompleteSimulation}
+                >
+                  Complete Practice Session (+500 points)
+                </Button>
               </CardFooter>
             </Card>
           </div>

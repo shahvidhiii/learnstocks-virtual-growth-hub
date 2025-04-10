@@ -1,9 +1,9 @@
-
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useNavigate } from "react-router-dom";
 import NavigationBar from "@/components/NavigationBar";
 import StockCard from "@/components/StockCard";
 import { PortfolioChart } from "@/components/PortfolioChart";
@@ -13,6 +13,7 @@ import { Coins, Briefcase, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useBalanceStore } from "@/stores/balanceStore";
 
 const mockPortfolio: Portfolio = {
   userId: "user1",
@@ -116,16 +117,16 @@ const mockStocks: Stock[] = [
 ];
 
 const Home = () => {
+  const navigate = useNavigate();
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [lastLoginDate, setLastLoginDate] = useState<string | null>(null);
-  const [userPoints, setUserPoints] = useState(0);
+  const { balance, setBalance } = useBalanceStore();
   const [portfolio, setPortfolio] = useState<Portfolio>(mockPortfolio);
   const [trendingStocks, setTrendingStocks] = useState<Stock[]>(mockStocks);
   const [selectedTab, setSelectedTab] = useState("portfolio");
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
   
-  // Create a fetchUserData function that can be called whenever we need updated data
   const fetchUserData = useCallback(async () => {
     if (!user) return;
     
@@ -144,7 +145,9 @@ const Home = () => {
       }
       
       if (data) {
-        setUserPoints(data.points || 10000);
+        const userPoints = data.points || 10000;
+        setUserPoints(userPoints);
+        setBalance(userPoints);
         setLastLoginDate(data.last_login_date);
         setIsFirstLogin(!data.profile_completed);
       }
@@ -153,14 +156,16 @@ const Home = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, setBalance]);
+  
+  const handleTradeNow = () => {
+    navigate('/games', { state: { activeTab: 'simulator' } });
+  };
   
   useEffect(() => {
-    // Fetch user data when component mounts
     fetchUserData();
     
     if (user) {
-      // Listen for real-time changes to the user's profile
       const pointsChannel = supabase
         .channel('profile-changes')
         .on('postgres_changes', 
@@ -172,8 +177,9 @@ const Home = () => {
           }, 
           (payload) => {
             if (payload.new && payload.new.points !== undefined) {
-              // Update the points in the UI when they change in the database
-              setUserPoints(payload.new.points || 0);
+              const updatedPoints = payload.new.points || 0;
+              setUserPoints(updatedPoints);
+              setBalance(updatedPoints);
             }
           }
         )
@@ -183,7 +189,7 @@ const Home = () => {
         supabase.removeChannel(pointsChannel);
       };
     }
-  }, [user, fetchUserData]);
+  }, [user, fetchUserData, setBalance]);
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -202,10 +208,10 @@ const Home = () => {
             </div>
             <div>
               <h2 className="text-xl font-semibold">Your Balance</h2>
-              <p className="text-3xl font-bold text-learngreen-700">{isLoading ? "Loading..." : `₹${userPoints.toLocaleString()}`}</p>
+              <p className="text-3xl font-bold text-learngreen-700">{isLoading ? "Loading..." : `₹${balance.toLocaleString()}`}</p>
             </div>
           </div>
-          <Button className="bg-learngreen-600 hover:bg-learngreen-700">Add More Points</Button>
+          <Button className="bg-learngreen-600 hover:bg-learngreen-700" onClick={handleTradeNow}>Add More Points</Button>
         </div>
         
         <div className="mb-6">
@@ -235,7 +241,7 @@ const Home = () => {
                     <div className="text-sm text-gray-500">Available for trading</div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700 mt-2">Trade Now</Button>
+                    <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700 mt-2" onClick={handleTradeNow}>Trade Now</Button>
                   </CardContent>
                 </Card>
                 
