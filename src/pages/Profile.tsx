@@ -15,9 +15,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
-import { UserCircle, Camera, Save } from "lucide-react";
+import { UserCircle, Camera, Save, Briefcase, Check, X } from "lucide-react";
 import NavigationBar from "@/components/NavigationBar";
 import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { CheckIcon, PlusCircle } from "lucide-react";
 
 const Profile = () => {
   const { user } = useAuth();
@@ -30,6 +32,9 @@ const Profile = () => {
     experience: "",
     riskTolerance: "",
   });
+  const [sectors, setSelectedSectors] = useState<string[]>([]);
+  const [availableSectors, setAvailableSectors] = useState<{id: string, name: string}[]>([]);
+  const [showSectorSelector, setShowSectorSelector] = useState(false);
   
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -65,6 +70,30 @@ const Profile = () => {
             riskTolerance: data.risk_tolerance || "",
           }));
         }
+
+        // Fetch user sectors
+        const { data: userSectorsData, error: sectorError } = await supabase
+          .from('user_sectors')
+          .select('sector')
+          .eq('user_id', user.id);
+          
+        if (sectorError) {
+          console.error("Error fetching user sectors:", sectorError);
+        } else if (userSectorsData) {
+          setSelectedSectors(userSectorsData.map(s => s.sector));
+        }
+        
+        // Fetch available sectors
+        const { data: sectorsData, error: sectorsError } = await supabase
+          .from('sectors')
+          .select('id, name')
+          .order('name');
+          
+        if (sectorsError) {
+          console.error("Error fetching sectors:", sectorsError);
+        } else if (sectorsData) {
+          setAvailableSectors(sectorsData);
+        }
       } catch (error) {
         console.error("Failed to load profile data:", error);
         toast.error("Failed to load your profile data.");
@@ -89,6 +118,14 @@ const Profile = () => {
       ...prevState,
       [name]: value
     }));
+  };
+  
+  const handleSectorToggle = (sector: string) => {
+    if (sectors.includes(sector)) {
+      setSelectedSectors(sectors.filter(s => s !== sector));
+    } else {
+      setSelectedSectors([...sectors, sector]);
+    }
   };
   
   const handleSaveProfile = async () => {
@@ -118,6 +155,26 @@ const Profile = () => {
         });
         
         if (updateError) throw updateError;
+      }
+      
+      // Delete existing user sectors
+      await supabase
+        .from('user_sectors')
+        .delete()
+        .eq('user_id', user.id);
+        
+      // Insert new sectors if any
+      if (sectors.length > 0) {
+        const sectorsToInsert = sectors.map(sector => ({
+          user_id: user.id,
+          sector: sector
+        }));
+        
+        const { error: sectorError } = await supabase
+          .from('user_sectors')
+          .insert(sectorsToInsert);
+          
+        if (sectorError) throw sectorError;
       }
       
       toast.success("Profile updated successfully");
@@ -225,6 +282,63 @@ const Profile = () => {
                     <SelectItem value="aggressive">Aggressive</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label>Sectors of Interest</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowSectorSelector(!showSectorSelector)}
+                    className="h-8 px-2 text-xs"
+                  >
+                    {showSectorSelector ? (
+                      <><X className="h-3.5 w-3.5 mr-1" /> Cancel</>
+                    ) : (
+                      <><PlusCircle className="h-3.5 w-3.5 mr-1" /> Edit Sectors</>
+                    )}
+                  </Button>
+                </div>
+                
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {sectors.length > 0 ? (
+                    sectors.map((sector) => (
+                      <Badge 
+                        key={sector}
+                        className="bg-learngreen-100 text-learngreen-800 hover:bg-learngreen-200"
+                      >
+                        {sector}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">No sectors selected</p>
+                  )}
+                </div>
+                
+                {showSectorSelector && (
+                  <div className="mt-2 border rounded-md p-4 bg-gray-50">
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableSectors.map((sector) => (
+                        <div key={sector.id} className="flex items-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`flex justify-between w-full items-center ${
+                              sectors.includes(sector.name) ? 'bg-learngreen-100 text-learngreen-800' : ''
+                            }`}
+                            onClick={() => handleSectorToggle(sector.name)}
+                          >
+                            <span>{sector.name}</span>
+                            {sectors.includes(sector.name) && (
+                              <CheckIcon className="h-3.5 w-3.5 ml-2" />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
