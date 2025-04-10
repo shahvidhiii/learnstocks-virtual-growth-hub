@@ -121,12 +121,20 @@ const Home = () => {
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [lastLoginDate, setLastLoginDate] = useState<string | null>(null);
   const { balance, setBalance } = useBalanceStore();
+  const [userPoints, setUserPoints] = useState(0);
   const [portfolio, setPortfolio] = useState<Portfolio>(mockPortfolio);
   const [trendingStocks, setTrendingStocks] = useState<Stock[]>(mockStocks);
   const [selectedTab, setSelectedTab] = useState("portfolio");
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
-  
+
+  useEffect(() => {
+    setPortfolio(prev => ({
+      ...prev,
+      cash: balance
+    }));
+  }, [balance]);
+
   const fetchUserData = useCallback(async () => {
     if (!user) return;
     
@@ -190,7 +198,7 @@ const Home = () => {
       };
     }
   }, [user, fetchUserData, setBalance]);
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
