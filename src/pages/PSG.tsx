@@ -1,17 +1,29 @@
 
-import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState, useEffect } from "react";
 import NavigationBar from "@/components/NavigationBar";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Stock } from "@/types";
-import { useNavigate } from "react-router-dom";
-import { Loader2, ArrowUpCircle, ArrowDownCircle, TrendingUp, BarChart3 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Check, Info, TrendingUp, TrendingDown, ShieldCheck } from "lucide-react";
+import { Stock, StockSuggestion } from "@/types";
+import StockCard from "@/components/StockCard";
+import { getPersonalizedRecommendations, getRiskLevel } from "@/utils/stockRecommender";
+import { cn } from "@/lib/utils";
 
+// Mock user profile - in a real app this would come from a user context or store
+const mockUserProfile = {
+  name: "Investor",
+  age: 30,
+  experience: "Intermediate" as const,
+  riskTolerance: "Medium" as const,
+  investmentHorizon: "medium-term" as const,
+  sectorPreferences: ["Banking", "Technology"],
+  currentPortfolio: ["INFY", "HDFCBANK"] // Stocks the user already owns
+};
+
+// Mock stocks data
 const mockStocks: Stock[] = [
   {
     id: "RELIANCE",
@@ -33,7 +45,7 @@ const mockStocks: Stock[] = [
     changePercent: 1.10,
     volume: 3200000,
     marketCap: 12000000000,
-    sector: "IT",
+    sector: "Technology",
   },
   {
     id: "INFY",
@@ -44,7 +56,7 @@ const mockStocks: Stock[] = [
     changePercent: -0.87,
     volume: 5100000,
     marketCap: 6100000000,
-    sector: "IT",
+    sector: "Technology",
   },
   {
     id: "HDFCBANK",
@@ -68,164 +80,112 @@ const mockStocks: Stock[] = [
     marketCap: 6400000000,
     sector: "Banking",
   },
+  {
+    id: "TATAMOTORS",
+    symbol: "TATAMOTORS",
+    name: "Tata Motors Ltd.",
+    price: 545,
+    change: 12.75,
+    changePercent: 2.40,
+    volume: 9800000,
+    marketCap: 3300000000,
+    sector: "Automotive",
+  },
+  {
+    id: "BAJFINANCE",
+    symbol: "BAJFINANCE",
+    name: "Bajaj Finance Ltd.",
+    price: 7120,
+    change: -85.40,
+    changePercent: -1.19,
+    volume: 1900000,
+    marketCap: 4300000000,
+    sector: "Finance",
+  },
+  {
+    id: "SUNPHARMA",
+    symbol: "SUNPHARMA",
+    name: "Sun Pharmaceutical Industries Ltd.",
+    price: 1125,
+    change: 22.80,
+    changePercent: 2.07,
+    volume: 2800000,
+    marketCap: 5200000000,
+    sector: "Pharmaceuticals",
+  },
+  {
+    id: "ITC",
+    symbol: "ITC",
+    name: "ITC Ltd.",
+    price: 395,
+    change: 1.75,
+    changePercent: 0.45,
+    volume: 6200000,
+    marketCap: 4900000000,
+    sector: "FMCG",
+  },
+  {
+    id: "HINDUNILVR",
+    symbol: "HINDUNILVR",
+    name: "Hindustan Unilever Ltd.",
+    price: 2490,
+    change: -12.40,
+    changePercent: -0.50,
+    volume: 1500000,
+    marketCap: 5800000000,
+    sector: "FMCG",
+  },
 ];
 
-interface UserProfileData {
-  age?: number;
-  experience?: string;
-  riskTolerance?: string;
-  investmentGoals?: string[];
-  sectors?: string[];
-}
-
-const PSR = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
-  const [recommendations, setRecommendations] = useState<Stock[]>([]);
-  const [userProfile, setUserProfile] = useState<UserProfileData>({});
+// PSG - Personal Stock Guidance page
+const PSG = () => {
+  const [recommendations, setRecommendations] = useState<StockSuggestion[]>([]);
+  const [selectedStock, setSelectedStock] = useState<StockSuggestion | null>(null);
+  const [userPreferences, setUserPreferences] = useState({
+    risk: mockUserProfile.riskTolerance,
+    horizon: mockUserProfile.investmentHorizon,
+    sectors: mockUserProfile.sectorPreferences,
+  });
   
   useEffect(() => {
-    // Load data when component mounts
-    const fetchData = async () => {
-      if (!user) {
-        toast.error("You need to log in to view recommendations");
-        navigate("/login");
-        return;
-      }
+    // Generate recommendations based on user profile
+    generateRecommendations();
+  }, [userPreferences]);
+  
+  const generateRecommendations = () => {
+    // Use our new recommendation engine
+    const recResults = getPersonalizedRecommendations(mockStocks, {
+      risk: userPreferences.risk as 'Low' | 'Medium' | 'High',
+      horizon: userPreferences.horizon as 'short-term' | 'medium-term' | 'long-term',
+      sectors: userPreferences.sectors,
+      currentPortfolio: mockUserProfile.currentPortfolio,
+      age: mockUserProfile.age
+    });
+    
+    // Convert to StockSuggestion type for compatibility with existing UI
+    const suggestions: StockSuggestion[] = recResults.map(rec => {
+      const potentialGain = rec.stock.change > 0 
+        ? rec.stock.changePercent 
+        : rec.score > 3 ? 5 + Math.random() * 10 : 2 + Math.random() * 5;
       
-      try {
-        setIsLoading(true);
-        
-        // Fetch user profile data
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('age, experience, risk_tolerance, investment_goals')
-          .eq('id', user.id)
-          .single();
-          
-        if (profileError) {
-          console.error("Error fetching profile:", profileError);
-          toast.error("Failed to load your profile data");
-          return;
-        }
-        
-        // Fetch user sectors
-        const { data: sectorData, error: sectorError } = await supabase
-          .from('user_sectors')
-          .select('sector')
-          .eq('user_id', user.id);
-          
-        if (sectorError) {
-          console.error("Error fetching sectors:", sectorError);
-        }
-        
-        const sectors = sectorData?.map(item => item.sector) || [];
-        
-        setUserProfile({
-          age: profileData?.age,
-          experience: profileData?.experience,
-          riskTolerance: profileData?.risk_tolerance,
-          investmentGoals: profileData?.investment_goals || [],
-          sectors: sectors
-        });
-        
-        // Generate personalized recommendations
-        const recommendedStocks = generateRecommendations(
-          mockStocks, 
-          profileData?.risk_tolerance || "Moderate",
-          profileData?.experience || "Beginner",
-          sectors
-        );
-        
-        setRecommendations(recommendedStocks);
-      } catch (err) {
-        console.error("Error in fetchData:", err);
-        toast.error("Something went wrong");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      return {
+        stockId: rec.stock.id,
+        symbol: rec.stock.symbol,
+        name: rec.stock.name,
+        currentPrice: rec.stock.price,
+        reason: rec.reasonings[0] || "Based on your investment profile",
+        riskLevel: getRiskLevel(rec.stock),
+        potentialGain: parseFloat(potentialGain.toFixed(2)),
+        score: rec.score,
+        reasonings: rec.reasonings
+      };
+    });
     
-    fetchData();
-  }, [user, navigate]);
-  
-  // Generate recommendations based on user profile
-  const generateRecommendations = (
-    stocks: Stock[], 
-    riskTolerance: string, 
-    experience: string,
-    sectors: string[]
-  ) => {
-    // Filter by sectors if user has selected sectors
-    let filteredStocks = stocks;
-    if (sectors.length > 0) {
-      filteredStocks = stocks.filter(stock => 
-        sectors.includes(stock.sector)
-      );
-      
-      // If no stocks match sectors, fall back to all stocks
-      if (filteredStocks.length === 0) {
-        filteredStocks = stocks;
-      }
-    }
-    
-    // Sort based on risk tolerance
-    if (riskTolerance === "Conservative" || experience === "Beginner") {
-      // For conservative or beginners, prefer stable stocks with low volatility
-      filteredStocks.sort((a, b) => Math.abs(a.changePercent) - Math.abs(b.changePercent));
-    } else if (riskTolerance === "Aggressive") {
-      // For aggressive, prefer high volatility stocks with growth potential
-      filteredStocks.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
-    } else {
-      // For moderate, prefer a mix
-      filteredStocks.sort((a, b) => b.marketCap - a.marketCap);
-    }
-    
-    return filteredStocks;
+    setRecommendations(suggestions);
   };
   
-  const getReasonForRecommendation = (stock: Stock) => {
-    const reasons = [];
-    
-    if (userProfile.sectors?.includes(stock.sector)) {
-      reasons.push(`Matches your interest in ${stock.sector}`);
-    }
-    
-    if (userProfile.riskTolerance === "Conservative" && Math.abs(stock.changePercent) < 1) {
-      reasons.push("Low volatility matches your conservative risk profile");
-    } else if (userProfile.riskTolerance === "Aggressive" && stock.changePercent > 1) {
-      reasons.push("Growth potential matches your aggressive risk profile");
-    } else if (userProfile.riskTolerance === "Moderate") {
-      reasons.push("Balanced risk-reward ratio");
-    }
-    
-    if (stock.marketCap > 10000000000) {
-      reasons.push("Large established company");
-    }
-    
-    if (reasons.length === 0) {
-      reasons.push("General market recommendation");
-    }
-    
-    return reasons[0]; // Return the first reason
-  };
-  
-  const getRiskLevel = (stock: Stock): "Low" | "Medium" | "High" => {
-    const volatility = Math.abs(stock.changePercent);
-    
-    if (volatility < 1) return "Low";
-    if (volatility < 2) return "Medium";
-    return "High";
-  };
-  
-  const getBadgeColor = (risk: "Low" | "Medium" | "High") => {
-    switch (risk) {
-      case "Low": return "bg-green-100 text-green-800";
-      case "Medium": return "bg-yellow-100 text-yellow-800";
-      case "High": return "bg-red-100 text-red-800";
-      default: return "";
-    }
+  const handleStockSelect = (stock: StockSuggestion) => {
+    setSelectedStock(stock);
   };
   
   return (
@@ -233,153 +193,243 @@ const PSR = () => {
       <NavigationBar />
       
       <main className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6">Personal Stock Recommendations</h1>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Personal Stock Guidance</h1>
+            <p className="text-gray-600">Stock recommendations tailored to your profile</p>
+          </div>
+          
+          <Button 
+            variant="outline" 
+            className="mt-2 md:mt-0"
+            onClick={generateRecommendations}
+          >
+            Refresh Recommendations
+          </Button>
+        </div>
         
-        {isLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-learngreen-600" />
-            <p>Analyzing your profile and generating recommendations...</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Investment Profile</CardTitle>
-                <CardDescription>Recommendations are personalized based on this information</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-500 text-sm">Risk Tolerance</p>
-                    <p className="font-medium">{userProfile.riskTolerance || "Not specified"}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-500 text-sm">Experience</p>
-                    <p className="font-medium">{userProfile.experience || "Not specified"}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-500 text-sm">Age</p>
-                    <p className="font-medium">{userProfile.age || "Not specified"}</p>
-                  </div>
+        {/* User Profile Summary */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle>Your Investment Profile</CardTitle>
+            <CardDescription>
+              Recommendations are based on these preferences
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gray-50 p-4 rounded-md">
+                <div className="text-sm text-gray-500">Risk Tolerance</div>
+                <div className="flex items-center mt-1">
+                  <div className={cn(
+                    "w-3 h-3 rounded-full mr-2",
+                    userPreferences.risk === "Low" ? "bg-green-500" : 
+                    userPreferences.risk === "Medium" ? "bg-amber-500" : "bg-red-500"
+                  )}></div>
+                  <div className="font-medium">{userPreferences.risk}</div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-md">
+                <div className="text-sm text-gray-500">Investment Horizon</div>
+                <div className="font-medium mt-1">
+                  {userPreferences.horizon === "short-term" ? "Short Term (< 1 year)" :
+                   userPreferences.horizon === "medium-term" ? "Medium Term (1-5 years)" :
+                   "Long Term (5+ years)"}
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-md">
+                <div className="text-sm text-gray-500">Sector Preferences</div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {userPreferences.sectors.map(sector => (
+                    <Badge key={sector} variant="outline">{sector}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        {/* Recommendations Tabs */}
+        <Tabs defaultValue="all" className="mb-6">
+          <TabsList className="mb-4">
+            <TabsTrigger value="all">All Recommendations</TabsTrigger>
+            <TabsTrigger value="low-risk">Low Risk</TabsTrigger>
+            <TabsTrigger value="high-potential">High Potential</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="all">
+            <div className="grid gap-4">
+              {recommendations.map((stock) => (
+                <RecommendationCard 
+                  key={stock.stockId} 
+                  recommendation={stock} 
+                  onSelect={() => handleStockSelect(stock)}
+                />
+              ))}
+              
+              {recommendations.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No recommendations available. Try adjusting your preferences.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="low-risk">
+            <div className="grid gap-4">
+              {recommendations
+                .filter(stock => stock.riskLevel === "Low")
+                .map((stock) => (
+                  <RecommendationCard 
+                    key={stock.stockId} 
+                    recommendation={stock} 
+                    onSelect={() => handleStockSelect(stock)}
+                  />
+                ))
+              }
+              
+              {recommendations.filter(stock => stock.riskLevel === "Low").length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No low-risk recommendations available.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="high-potential">
+            <div className="grid gap-4">
+              {recommendations
+                .filter(stock => stock.potentialGain > 5)
+                .map((stock) => (
+                  <RecommendationCard 
+                    key={stock.stockId} 
+                    recommendation={stock} 
+                    onSelect={() => handleStockSelect(stock)}
+                  />
+                ))
+              }
+              
+              {recommendations.filter(stock => stock.potentialGain > 5).length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No high-potential recommendations available.</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        {/* Selected Stock Dialog */}
+        {selectedStock && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="hidden">Open Dialog</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>{selectedStock.name} ({selectedStock.symbol})</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4 py-4">
+                <div className="flex justify-between">
+                  <div>Current Price</div>
+                  <div className="font-semibold">₹{selectedStock.currentPrice}</div>
                 </div>
                 
-                <div className="mt-4">
-                  <p className="text-gray-500 text-sm mb-2">Investment Goals</p>
-                  <div className="flex flex-wrap gap-2">
-                    {userProfile.investmentGoals && userProfile.investmentGoals.length > 0 ? (
-                      userProfile.investmentGoals.map((goal) => (
-                        <Badge key={goal} variant="outline">{goal}</Badge>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500">No goals specified</p>
-                    )}
-                  </div>
+                <div>
+                  <div className="mb-2">Why we recommend this stock:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    {selectedStock.reasonings?.map((reason, index) => (
+                      <li key={index} className="text-sm text-gray-600">{reason}</li>
+                    ))}
+                  </ul>
                 </div>
                 
-                <div className="mt-4">
-                  <p className="text-gray-500 text-sm mb-2">Sectors of Interest</p>
-                  <div className="flex flex-wrap gap-2">
-                    {userProfile.sectors && userProfile.sectors.length > 0 ? (
-                      userProfile.sectors.map((sector) => (
-                        <Badge key={sector} className="bg-learngreen-100 text-learngreen-800 hover:bg-learngreen-200">{sector}</Badge>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-500">No sectors specified</p>
-                    )}
+                <div className="flex items-center">
+                  <ShieldCheck className={cn(
+                    "mr-2 h-4 w-4",
+                    selectedStock.riskLevel === "Low" ? "text-green-500" : 
+                    selectedStock.riskLevel === "Medium" ? "text-amber-500" : "text-red-500"
+                  )} />
+                  <span className="text-sm">
+                    {selectedStock.riskLevel} Risk Level
+                  </span>
+                </div>
+                
+                <div className="flex items-center">
+                  <TrendingUp className="mr-2 h-4 w-4 text-green-500" />
+                  <span className="text-sm">
+                    Potential Gain: +{selectedStock.potentialGain}% (estimated)
+                  </span>
+                </div>
+                
+                <div className="bg-learngreen-50 p-3 rounded-md text-sm text-learngreen-700 flex items-start">
+                  <Info className="h-4 w-4 mr-2 mt-0.5 text-learngreen-500" />
+                  <div>
+                    This is a simulated recommendation. Always do your own research before investing.
                   </div>
                 </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={() => navigate("/profile")}
-                >
-                  Update Profile
-                </Button>
-              </CardFooter>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <div className="flex items-center">
-                    <BarChart3 className="h-5 w-5 mr-2 text-learngreen-600" />
-                    Recommended Stocks
-                  </div>
-                </CardTitle>
-                <CardDescription>Based on your investment profile and interests</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {recommendations.length > 0 ? (
-                  <div className="space-y-4">
-                    {recommendations.map((stock) => {
-                      const riskLevel = getRiskLevel(stock);
-                      return (
-                        <div key={stock.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h3 className="font-semibold text-lg">{stock.name}</h3>
-                              <div className="flex items-center space-x-2">
-                                <span className="text-sm font-medium">{stock.symbol}</span>
-                                <Badge variant="outline">{stock.sector}</Badge>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold">₹{stock.price.toLocaleString()}</div>
-                              <div className={`flex items-center ${stock.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {stock.changePercent >= 0 ? (
-                                  <ArrowUpCircle className="h-4 w-4 mr-1" />
-                                ) : (
-                                  <ArrowDownCircle className="h-4 w-4 mr-1" />
-                                )}
-                                <span>
-                                  {Math.abs(stock.changePercent).toFixed(2)}%
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
-                            <div>
-                              <p className="text-xs text-gray-500">Why Recommended</p>
-                              <p className="text-sm">{getReasonForRecommendation(stock)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Market Cap</p>
-                              <p className="text-sm">₹{(stock.marketCap / 1000000).toFixed(2)}M</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">Risk Level</p>
-                              <Badge className={getBadgeColor(riskLevel)}>{riskLevel}</Badge>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-3 flex justify-end">
-                            <Button 
-                              size="sm" 
-                              className="bg-learngreen-600 hover:bg-learngreen-700"
-                              onClick={() => navigate('/games', { state: { activeTab: 'simulator', selectedStock: stock.symbol } })}
-                            >
-                              <TrendingUp className="h-4 w-4 mr-1" /> Trade Now
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p>No recommendations available. Please update your profile.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button variant="outline">Add to Watchlist</Button>
+                <Button>Invest (Simulation)</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
       </main>
     </div>
   );
 };
 
-export default PSR;
+interface RecommendationCardProps {
+  recommendation: StockSuggestion;
+  onSelect: () => void;
+}
+
+const RecommendationCard = ({ recommendation, onSelect }: RecommendationCardProps) => {
+  return (
+    <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={onSelect}>
+      <CardContent className="p-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="font-medium text-lg">{recommendation.symbol}</div>
+            <div className="text-sm text-gray-600">{recommendation.name}</div>
+            
+            <div className="mt-2">
+              <Badge className={cn(
+                "inline-flex items-center text-xs",
+                recommendation.riskLevel === "Low" ? "bg-green-100 text-green-800" : 
+                recommendation.riskLevel === "Medium" ? "bg-amber-100 text-amber-800" : 
+                "bg-red-100 text-red-800"
+              )}>
+                {recommendation.riskLevel} Risk
+              </Badge>
+            </div>
+          </div>
+          
+          <div className="text-right">
+            <div className="font-medium">₹{recommendation.currentPrice}</div>
+            <div className="text-green-600 flex items-center justify-end text-sm">
+              <TrendingUp className="h-3 w-3 mr-1" />
+              <span>+{recommendation.potentialGain}%</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-3">
+          <div className="text-xs text-gray-500">Why recommended:</div>
+          <div className="text-sm flex items-center mt-1">
+            <Check className="h-3 w-3 mr-1 text-green-500" />
+            {recommendation.reason}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default PSG;
+

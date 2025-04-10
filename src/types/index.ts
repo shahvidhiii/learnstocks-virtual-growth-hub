@@ -9,6 +9,8 @@ export type UserProfile = {
   points: number;
   lastLoginDate: string;
   portfolioValue: number;
+  investmentHorizon?: 'short-term' | 'medium-term' | 'long-term';
+  sectorPreferences?: string[];
 }
 
 export type Stock = {
@@ -80,4 +82,7 @@ export type StockSuggestion = {
   reason: string;
   riskLevel: 'Low' | 'Medium' | 'High';
   potentialGain: number;
+  score?: number;
+  reasonings?: string[];
 }
+
