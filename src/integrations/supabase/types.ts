@@ -13,6 +13,7 @@ export type Database = {
         Row: {
           age: number | null
           created_at: string | null
+          email: string | null
           experience: string | null
           id: string
           investment_goals: string[] | null
@@ -26,6 +27,7 @@ export type Database = {
         Insert: {
           age?: number | null
           created_at?: string | null
+          email?: string | null
           experience?: string | null
           id: string
           investment_goals?: string[] | null
@@ -39,6 +41,7 @@ export type Database = {
         Update: {
           age?: number | null
           created_at?: string | null
+          email?: string | null
           experience?: string | null
           id?: string
           investment_goals?: string[] | null

@@ -1,4 +1,3 @@
-
 export type UserProfile = {
   id: string;
   name: string;
@@ -11,6 +10,7 @@ export type UserProfile = {
   portfolioValue: number;
   investmentHorizon?: 'short-term' | 'medium-term' | 'long-term';
   sectorPreferences?: string[];
+  email?: string;
 }
 
 export type Stock = {
@@ -85,4 +85,3 @@ export type StockSuggestion = {
   score?: number;
   reasonings?: string[];
 }
-
