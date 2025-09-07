@@ -4,80 +4,134 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, BarChart2, ThumbsUp, AlertCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart2, ThumbsUp, AlertCircle, RefreshCw } from "lucide-react";
 import { Prediction } from "@/types";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import StockPriceCard from "@/components/StockPriceCard";
 
-// Mock predictions
-const mockPredictions: Prediction[] = [
-  {
-    stockId: "RELIANCE",
-    symbol: "RELIANCE",
-    name: "Reliance Industries Ltd.",
-    currentPrice: 2650,
-    predictedPrice: 2850,
-    confidenceLevel: 75,
-    timeFrame: "1 month",
-    reasonings: [
-      "Strong revenue growth in retail segment",
-      "Expansion of digital services",
-      "Positive market sentiment",
-    ],
-  },
-  {
-    stockId: "INFY",
-    symbol: "INFY",
-    name: "Infosys Ltd.",
-    currentPrice: 1450,
-    predictedPrice: 1380,
-    confidenceLevel: 65,
-    timeFrame: "2 weeks",
-    reasonings: [
-      "Pressure on IT spending due to global economic concerns",
-      "Reduced profit margin projections",
-      "Increasing competition in the sector",
-    ],
-  },
-  {
-    stockId: "ICICIBANK",
-    symbol: "ICICIBANK",
-    name: "ICICI Bank Ltd.",
-    currentPrice: 920,
-    predictedPrice: 980,
-    confidenceLevel: 80,
-    timeFrame: "3 weeks",
-    reasonings: [
-      "Strong loan growth in retail segment",
-      "Improving asset quality metrics",
-      "Favorable interest rate environment",
-    ],
-  },
-  {
-    stockId: "TATAMOTORS",
-    symbol: "TATAMOTORS",
-    name: "Tata Motors Ltd.",
-    currentPrice: 545,
-    predictedPrice: 590,
-    confidenceLevel: 70,
-    timeFrame: "1 month",
-    reasonings: [
-      "Increasing demand for EV models",
-      "Recovery in global automotive market",
-      "New product launches planned",
-    ],
-  },
+const DEFAULT_STOCKS = [
+  'RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 
+  'ICICIBANK.NS', 'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS'
 ];
 
+interface StockPrice {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
+
 const Predictions = () => {
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [stockPrices, setStockPrices] = useState<StockPrice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStockPrices = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('stock-prices', {
+        body: {
+          symbols: DEFAULT_STOCKS
+        }
+      });
+
+      if (error) {
+        console.error('Error fetching stock prices:', error);
+        return;
+      }
+
+      if (data?.prices) {
+        setStockPrices(data.prices);
+      }
+    } catch (error) {
+      console.error('Error fetching stock prices:', error);
+    }
+  };
+
+  const fetchPredictions = async () => {
+    try {
+      setRefreshing(true);
+      const { data, error } = await supabase.functions.invoke('stock-predictions', {
+        body: {
+          symbols: DEFAULT_STOCKS,
+          days: 30
+        }
+      });
+
+      if (error) {
+        console.error('Error fetching predictions:', error);
+        toast.error('Failed to fetch predictions');
+        return;
+      }
+
+      if (data?.predictions) {
+        setPredictions(data.predictions);
+        toast.success('Predictions updated successfully');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Failed to fetch predictions');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchAllData = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchPredictions(), fetchStockPrices()]);
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchAllData();
+    
+    // Refresh stock prices every 2 minutes
+    const interval = setInterval(fetchStockPrices, 120000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       
       <main className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-2">Stock Predictions</h1>
+        <div className="flex justify-between items-center mb-2">
+          <h1 className="text-2xl font-bold">Stock Predictions</h1>
+          <Button 
+            onClick={fetchAllData}
+            disabled={refreshing}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
+            {refreshing ? 'Updating...' : 'Refresh'}
+          </Button>
+        </div>
         <p className="text-gray-600 mb-6">
-          AI-powered predictions to help guide your investment decisions
+          AI-powered predictions based on real market data and technical analysis
         </p>
+        
+        {/* Current Stock Prices */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Live Stock Prices</CardTitle>
+            <CardDescription>
+              Real-time prices of major stocks (updates every 2 minutes)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {stockPrices.map((stock) => (
+                <StockPriceCard key={stock.symbol} stock={stock} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
         
         <div className="bg-learngreen-50 border border-learngreen-100 rounded-lg p-4 mb-6">
           <div className="flex items-start">
@@ -101,16 +155,36 @@ const Predictions = () => {
           </TabsList>
           
           <TabsContent value="all">
-            <div className="grid md:grid-cols-2 gap-4">
-              {mockPredictions.map((prediction) => (
-                <PredictionCard key={prediction.stockId} prediction={prediction} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardHeader className="pb-2">
+                      <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-200 rounded"></div>
+                        <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                {predictions.map((prediction) => (
+                  <PredictionCard key={prediction.stockId} prediction={prediction} />
+                ))}
+              </div>
+            )}
           </TabsContent>
           
           <TabsContent value="bullish">
             <div className="grid md:grid-cols-2 gap-4">
-              {mockPredictions
+              {predictions
                 .filter(p => p.predictedPrice > p.currentPrice)
                 .map((prediction) => (
                   <PredictionCard key={prediction.stockId} prediction={prediction} />
@@ -121,7 +195,7 @@ const Predictions = () => {
           
           <TabsContent value="bearish">
             <div className="grid md:grid-cols-2 gap-4">
-              {mockPredictions
+              {predictions
                 .filter(p => p.predictedPrice < p.currentPrice)
                 .map((prediction) => (
                   <PredictionCard key={prediction.stockId} prediction={prediction} />
@@ -190,8 +264,12 @@ const Predictions = () => {
                 </div>
               </div>
               
-              <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700">
-                View Detailed Market Analysis
+              <Button 
+                className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                onClick={fetchAllData}
+                disabled={refreshing}
+              >
+                {refreshing ? 'Updating Analysis...' : 'Refresh Market Analysis'}
               </Button>
             </div>
           </CardContent>
@@ -229,15 +307,15 @@ const PredictionCard = ({ prediction }: PredictionCardProps) => {
         <div className="flex justify-between mb-4">
           <div>
             <div className="text-sm text-gray-500">Current Price</div>
-            <div className="font-medium">₹{prediction.currentPrice}</div>
+            <div className="font-medium">₹{prediction.currentPrice.toFixed(2)}</div>
           </div>
           <div className="text-center">
             <div className="text-sm text-gray-500">Predicted</div>
-            <div className="font-medium">₹{prediction.predictedPrice}</div>
+            <div className="font-medium">₹{prediction.predictedPrice.toFixed(2)}</div>
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-500">Potential {isBullish ? "Gain" : "Loss"}</div>
-            <div className={isBullish ? "text-green-600" : "text-red-600"}>
+            <div className={cn("font-semibold", isBullish ? "text-green-600" : "text-red-600")}>
               {isBullish ? "+" : ""}{changePercent.toFixed(2)}%
             </div>
           </div>
