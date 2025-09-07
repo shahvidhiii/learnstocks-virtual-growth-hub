@@ -12,75 +12,396 @@ import { toast } from "sonner";
 import { Quiz } from "@/types";
 import { useBalanceStore } from "@/stores/balanceStore";
 
-// Mock quiz data
+// All questions pool for Stock Market Basics
+const allBasicsQuestions = [
+  {
+    id: "q1",
+    text: "What is a stock?",
+    options: [
+      "A type of bond issued by companies",
+      "A unit of ownership in a company",
+      "A loan given to a company",
+      "A government security"
+    ],
+    correctOption: 1,
+    explanation: "A stock represents a share of ownership in a company and entitles the holder to a portion of the company's assets and earnings."
+  },
+  {
+    id: "q2",
+    text: "What is a bull market?",
+    options: [
+      "A market where stock prices are falling",
+      "A market dominated by aggressive trading",
+      "A market where stock prices are rising",
+      "A market with high volatility"
+    ],
+    correctOption: 2,
+    explanation: "A bull market is characterized by a sustained rise in market prices, typically 20% or more from recent lows."
+  },
+  {
+    id: "q3",
+    text: "What is a dividend?",
+    options: [
+      "A fee charged by brokers",
+      "A portion of profits paid to shareholders",
+      "The difference between buy and sell price",
+      "A type of market order"
+    ],
+    correctOption: 1,
+    explanation: "A dividend is a distribution of a portion of a company's earnings to its shareholders as decided by the board of directors."
+  },
+  {
+    id: "q4",
+    text: "What does P/E ratio stand for?",
+    options: [
+      "Profit/Earnings ratio",
+      "Price/Earnings ratio",
+      "Potential/Expected ratio",
+      "Performance/Efficiency ratio"
+    ],
+    correctOption: 1,
+    explanation: "Price-to-Earnings (P/E) ratio is a valuation ratio of a company's current share price compared to its per-share earnings."
+  },
+  {
+    id: "q5",
+    text: "What is market capitalization?",
+    options: [
+      "The total value of a company's assets",
+      "The total value of a company's outstanding shares",
+      "The maximum price of a stock in the past year",
+      "The total debt of a company"
+    ],
+    correctOption: 1,
+    explanation: "Market capitalization (or market cap) is the total value of a company's outstanding shares of stock, calculated by multiplying the stock price by the number of outstanding shares."
+  },
+  {
+    id: "q6",
+    text: "When you buy one share of a company's stock, you become:",
+    options: [
+      "A partial owner of the company",
+      "A lender to the company",
+      "A company employee",
+      "A mandatory board member"
+    ],
+    correctOption: 0,
+    explanation: "Buying one share means you own a fraction of that company and share in its profits and risks."
+  },
+  {
+    id: "q7",
+    text: "Why do private companies typically decide to go public with an IPO?",
+    options: [
+      "To avoid taxes on profits",
+      "To raise capital for growth and expansion",
+      "To convert to a cooperative",
+      "To limit the number of shareholders"
+    ],
+    correctOption: 1,
+    explanation: "The primary reason a company launches an IPO is to raise funds for growth, expansion, and paying debts."
+  },
+  {
+    id: "q8",
+    text: "What happens during a 2-for-1 forward stock split?",
+    options: [
+      "Each existing share is split into 2 shares, halving the price of each share",
+      "Number of shares is cut in half, doubling the price",
+      "Total market value of your holding doubles",
+      "Company issues extra shares as dividends"
+    ],
+    correctOption: 0,
+    explanation: "In a forward stock split, the number of shares doubles but price halves, leaving the overall value unchanged."
+  },
+  {
+    id: "q9",
+    text: "Which type of risk can be reduced through diversification of a portfolio?",
+    options: [
+      "Systematic (market) risk",
+      "Unsystematic (company-specific) risk",
+      "Inflation risk",
+      "Currency risk"
+    ],
+    correctOption: 1,
+    explanation: "Diversification helps reduce unsystematic risk (company- or sector-specific), but not broad market risks."
+  },
+  {
+    id: "q10",
+    text: "Which order type allows you to specify the maximum price you are willing to pay when buying a stock?",
+    options: [
+      "Market order",
+      "Stop order",
+      "Limit order",
+      "Fill-or-kill order"
+    ],
+    correctOption: 2,
+    explanation: "A limit order lets you set the maximum buying price (or minimum selling price)."
+  },
+  {
+    id: "q11",
+    text: "Trading on margin means:",
+    options: [
+      "Borrowing funds from a broker to buy securities, thereby magnifying gains and losses",
+      "Trading only government bonds",
+      "Buying stocks with cash only",
+      "Agreeing to hold a stock for at least one year"
+    ],
+    correctOption: 0,
+    explanation: "Margin trading involves borrowing money from brokers to buy more shares than your cash allows."
+  },
+  {
+    id: "q12",
+    text: "The Nifty 50 index represents:",
+    options: [
+      "The 50 most actively traded global stocks",
+      "50 large-cap Indian companies listed on NSE",
+      "50 top-performing startups in India",
+      "The 50 largest banks in India"
+    ],
+    correctOption: 1,
+    explanation: "The Nifty 50 tracks 50 large-cap companies across sectors listed on the NSE."
+  },
+  {
+    id: "q13",
+    text: "What is the main role of SEBI in India?",
+    options: [
+      "To regulate and protect investors in the securities market",
+      "To provide loans to listed companies",
+      "To set interest rates for banks",
+      "To issue government bonds"
+    ],
+    correctOption: 0,
+    explanation: "SEBI (Securities and Exchange Board of India) regulates securities markets and safeguards investor interests."
+  },
+  {
+    id: "q14",
+    text: "Which of the following best describes an ETF (Exchange Traded Fund)?",
+    options: [
+      "A mutual fund that trades on stock exchanges like a stock",
+      "A private loan issued by banks",
+      "A type of government bond",
+      "A company's retained earnings"
+    ],
+    correctOption: 0,
+    explanation: "ETFs are investment funds traded on exchanges, combining features of mutual funds and stocks."
+  },
+  {
+    id: "q15",
+    text: "If Reliance Industries' share price is ₹2,500 and it has 6.8 billion shares outstanding, its market capitalization is approximately:",
+    options: [
+      "₹1.7 trillion",
+      "₹17 trillion",
+      "₹68 trillion",
+      "₹170 trillion"
+    ],
+    correctOption: 1,
+    explanation: "Market cap = Price × Outstanding shares = 2500 × 6.8B ≈ ₹17 trillion."
+  },
+  {
+    id: "q16",
+    text: "A stock with a beta greater than 1 indicates:",
+    options: [
+      "The stock is less volatile than the market",
+      "The stock moves opposite to the market",
+      "The stock is more volatile than the market",
+      "The stock has no correlation with the market"
+    ],
+    correctOption: 2,
+    explanation: "A beta >1 means the stock amplifies market movements, rising or falling more sharply."
+  },
+  {
+    id: "q17",
+    text: "What is short selling?",
+    options: [
+      "Selling a stock before you own it, hoping to buy it back later at a lower price",
+      "Selling shares immediately after an IPO",
+      "Selling stocks after a dividend is declared",
+      "Selling only penny stocks"
+    ],
+    correctOption: 0,
+    explanation: "Short selling involves borrowing shares, selling them, and repurchasing later at (hopefully) a lower price."
+  },
+  {
+    id: "q18",
+    text: "Which corporate action reduces the share price while keeping the market cap unchanged?",
+    options: [
+      "Dividend declaration",
+      "Reverse stock split",
+      "Stock split",
+      "Bonus issue"
+    ],
+    correctOption: 2,
+    explanation: "Stock splits increase share count, lowering per-share price but leaving market cap unchanged."
+  },
+  {
+    id: "q19",
+    text: "What does the term 'blue-chip stock' mean?",
+    options: [
+      "High-value government bonds",
+      "Stocks of large, financially stable, and reputable companies",
+      "Stocks that always pay dividends",
+      "Technology sector stocks only"
+    ],
+    correctOption: 1,
+    explanation: "Blue-chip stocks are well-established, financially sound companies with reliable performance."
+  },
+  {
+    id: "q20",
+    text: "Which financial statement shows a company's revenues and expenses?",
+    options: [
+      "Cash flow statement",
+      "Balance sheet",
+      "Income statement",
+      "Equity statement"
+    ],
+    correctOption: 2,
+    explanation: "The income statement (P&L) reports revenues, expenses, and profits over a period."
+  },
+  {
+    id: "q21",
+    text: "What is the role of a stock exchange?",
+    options: [
+      "To lend money to companies",
+      "To provide a platform for buying and selling securities",
+      "To decide which companies are profitable",
+      "To regulate bank interest rates"
+    ],
+    correctOption: 1,
+    explanation: "Exchanges provide infrastructure and platforms for investors to trade securities."
+  },
+  {
+    id: "q22",
+    text: "What does liquidity of a stock mean?",
+    options: [
+      "The speed at which it can be bought or sold without affecting price",
+      "The company's total profits",
+      "Its ability to pay dividends",
+      "The stability of its stock price"
+    ],
+    correctOption: 0,
+    explanation: "Liquidity measures how easily an asset can be converted to cash without price changes."
+  },
+  {
+    id: "q23",
+    text: "Which of these is an example of a defensive stock?",
+    options: [
+      "Tesla (EV manufacturer)",
+      "Hindustan Unilever (consumer goods)",
+      "Zomato (food delivery)",
+      "Adani Ports (infrastructure)"
+    ],
+    correctOption: 1,
+    explanation: "Consumer goods companies like HUL are defensive stocks, performing steadily even in downturns."
+  },
+  {
+    id: "q24",
+    text: "What does an index fund do?",
+    options: [
+      "Attempts to outperform the market",
+      "Tracks and replicates a specific market index",
+      "Only invests in IPOs",
+      "Invests exclusively in government bonds"
+    ],
+    correctOption: 1,
+    explanation: "Index funds mirror the performance of a market index like Nifty 50 or S&P 500."
+  },
+  {
+    id: "q25",
+    text: "What is meant by market volatility?",
+    options: [
+      "Changes in interest rates",
+      "Fluctuations in stock prices and market indices",
+      "Company earnings reports",
+      "Government bond yields"
+    ],
+    correctOption: 1,
+    explanation: "Volatility refers to how much and how quickly stock prices move up or down."
+  },
+  {
+    id: "q26",
+    text: "Which of these companies was added to the Nifty 50 index in 2023?",
+    options: [
+      "Adani Enterprises",
+      "Paytm",
+      "JSW Steel",
+      "HDFC Life"
+    ],
+    correctOption: 0,
+    explanation: "Adani Enterprises was included in the Nifty 50 index in 2023."
+  },
+  {
+    id: "q27",
+    text: "What is a circuit breaker in stock markets?",
+    options: [
+      "A limit placed to halt trading during extreme volatility",
+      "A device used in stock exchange buildings",
+      "A limit on dividend payouts",
+      "An order to automatically sell stocks"
+    ],
+    correctOption: 0,
+    explanation: "Circuit breakers temporarily halt trading when indices move beyond pre-set thresholds."
+  },
+  {
+    id: "q28",
+    text: "Which ratio measures how much a company earns relative to its share price?",
+    options: [
+      "Debt-to-equity ratio",
+      "Current ratio",
+      "Price-to-earnings (P/E) ratio",
+      "Dividend yield ratio"
+    ],
+    correctOption: 2,
+    explanation: "The P/E ratio compares a company's share price to its earnings per share."
+  },
+  {
+    id: "q29",
+    text: "Which of these best describes insider trading?",
+    options: [
+      "Legally buying stocks during an IPO",
+      "Using non-public information to trade securities",
+      "Government purchase of company shares",
+      "Trading only blue-chip stocks"
+    ],
+    correctOption: 1,
+    explanation: "Insider trading is the illegal practice of trading based on material non-public information."
+  },
+  {
+    id: "q30",
+    text: "Which index represents the top 30 companies listed on the Bombay Stock Exchange?",
+    options: [
+      "Nifty 50",
+      "BSE Sensex",
+      "Dow Jones",
+      "Russell 2000"
+    ],
+    correctOption: 1,
+    explanation: "The Sensex is the benchmark index of the BSE, comprising 30 top companies."
+  }
+];
+
+// Helper function to get daily questions (5 random questions per day)
+const getDailyQuestions = () => {
+  const today = new Date().toDateString();
+  const storageKey = `dailyQuestions_basics_${today}`;
+  
+  let dailyQuestions = localStorage.getItem(storageKey);
+  
+  if (!dailyQuestions) {
+    // Generate 5 random questions for today
+    const shuffled = [...allBasicsQuestions].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 5);
+    localStorage.setItem(storageKey, JSON.stringify(selected));
+    return selected;
+  }
+  
+  return JSON.parse(dailyQuestions);
+};
+
+// Mock quiz data with daily limit
 const mockQuizzes: Quiz[] = [
   {
     id: "basics",
     title: "Stock Market Basics",
-    description: "Test your knowledge of fundamental stock market concepts",
+    description: "Test your knowledge of fundamental stock market concepts (5 questions per day)",
     points: 500,
-    questions: [
-      {
-        id: "q1",
-        text: "What is a stock?",
-        options: [
-          "A type of bond issued by companies",
-          "A unit of ownership in a company",
-          "A loan given to a company",
-          "A government security"
-        ],
-        correctOption: 1,
-        explanation: "A stock represents a share of ownership in a company and entitles the holder to a portion of the company's assets and earnings."
-      },
-      {
-        id: "q2",
-        text: "What is a bull market?",
-        options: [
-          "A market where stock prices are falling",
-          "A market dominated by aggressive trading",
-          "A market where stock prices are rising",
-          "A market with high volatility"
-        ],
-        correctOption: 2,
-        explanation: "A bull market is characterized by a sustained rise in market prices, typically 20% or more from recent lows."
-      },
-      {
-        id: "q3",
-        text: "What is a dividend?",
-        options: [
-          "A fee charged by brokers",
-          "A portion of profits paid to shareholders",
-          "The difference between buy and sell price",
-          "A type of market order"
-        ],
-        correctOption: 1,
-        explanation: "A dividend is a distribution of a portion of a company's earnings to its shareholders as decided by the board of directors."
-      },
-      {
-        id: "q4",
-        text: "What does P/E ratio stand for?",
-        options: [
-          "Profit/Earnings ratio",
-          "Price/Earnings ratio",
-          "Potential/Expected ratio",
-          "Performance/Efficiency ratio"
-        ],
-        correctOption: 1,
-        explanation: "Price-to-Earnings (P/E) ratio is a valuation ratio of a company's current share price compared to its per-share earnings."
-      },
-      {
-        id: "q5",
-        text: "What is market capitalization?",
-        options: [
-          "The total value of a company's assets",
-          "The total value of a company's outstanding shares",
-          "The maximum price of a stock in the past year",
-          "The total debt of a company"
-        ],
-        correctOption: 1,
-        explanation: "Market capitalization (or market cap) is the total value of a company's outstanding shares of stock, calculated by multiplying the stock price by the number of outstanding shares."
-      }
-    ]
+    questions: getDailyQuestions()
   },
   {
     id: "technical",
@@ -136,7 +457,16 @@ const Games = () => {
   }, [location.state]);
   
   const handleStartQuiz = (quiz: Quiz) => {
-    setSelectedQuiz(quiz);
+    // Refresh daily questions for basics quiz
+    if (quiz.id === "basics") {
+      const updatedQuiz = {
+        ...quiz,
+        questions: getDailyQuestions()
+      };
+      setSelectedQuiz(updatedQuiz);
+    } else {
+      setSelectedQuiz(quiz);
+    }
     setIsQuizDialogOpen(true);
   };
   

@@ -29,6 +29,11 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
   
+  // Check if this is the daily basics quiz
+  const isDailyBasics = quiz.id === "basics";
+  const today = new Date().toDateString();
+  const completedToday = localStorage.getItem(`quiz_completed_basics_${today}`) === "true";
+  
   const handleSelectOption = (index: number) => {
     if (answeredCorrectly !== null) return; // Don't allow changing after answering
     setSelectedOption(index);
@@ -62,6 +67,11 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
     setIsProcessing(true);
     
     try {
+      // Mark daily quiz as completed
+      if (isDailyBasics) {
+        localStorage.setItem(`quiz_completed_basics_${today}`, "true");
+      }
+      
       // Update the user's points in the database using the RPC function
       if (user) {
         const { data, error } = await supabase.rpc('increment_points', {
@@ -100,6 +110,13 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
         <>
           <CardHeader>
             <CardTitle>{quiz.title}</CardTitle>
+            {isDailyBasics && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-2">
+                <p className="text-sm text-blue-700">
+                  🌟 Daily Challenge: 5 questions selected just for you today!
+                </p>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-sm">Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
               <span className="text-sm">Score: {score}</span>
@@ -195,6 +212,11 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                 <p className="font-medium text-learngreen-700">
                   You earned {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).points} points!
                 </p>
+                {isDailyBasics && (
+                  <p className="text-sm text-learngreen-600 mt-1">
+                    Come back tomorrow for 5 new questions! 📅
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
