@@ -22,6 +22,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
+  const [finalScore, setFinalScore] = useState(0);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const { user } = useAuth();
@@ -56,14 +57,16 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
       setSelectedOption(null);
       setAnsweredCorrectly(null);
     } else {
-      const finalScore = score + (answeredCorrectly ? 1 : 0);
+      // Calculate the final score including the last question
+      const completeFinalScore = score + (answeredCorrectly ? 1 : 0);
+      setFinalScore(completeFinalScore);
       setQuizCompleted(true);
-      processQuizCompletion(finalScore);
+      processQuizCompletion(completeFinalScore);
     }
   };
   
-  const processQuizCompletion = async (finalScore: number) => {
-    const calculatedScore = calculateFinalScore(finalScore);
+  const processQuizCompletion = async (totalScore: number) => {
+    const calculatedScore = calculateFinalScore(totalScore);
     setIsProcessing(true);
     
     try {
@@ -90,7 +93,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
       toast.error("Failed to process quiz results");
     } finally {
       setIsProcessing(false);
-      onComplete(finalScore);
+      onComplete(totalScore);
     }
   };
   
@@ -201,16 +204,16 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
             <div className="text-center space-y-4">
               <div className="mb-4">
                 <div className="text-6xl font-bold text-learngreen-600 mb-2">
-                  {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).percentage}%
+                  {calculateFinalScore(finalScore).percentage}%
                 </div>
                 <p className="text-xl">
-                  You got {score + (answeredCorrectly ? 1 : 0)} out of {quiz.questions.length} questions right
+                  You got {finalScore} out of {quiz.questions.length} questions right
                 </p>
               </div>
               
               <div className="p-4 bg-learngreen-50 rounded-md">
                 <p className="font-medium text-learngreen-700">
-                  You earned {calculateFinalScore(score + (answeredCorrectly ? 1 : 0)).points} points!
+                  You earned {calculateFinalScore(finalScore).points} points!
                 </p>
                 {isDailyBasics && (
                   <p className="text-sm text-learngreen-600 mt-1">
