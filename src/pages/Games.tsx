@@ -457,8 +457,16 @@ const Games = () => {
   }, [location.state]);
   
   const handleStartQuiz = (quiz: Quiz) => {
-    // Refresh daily questions for basics quiz
+    // Check daily limit for basics quiz
     if (quiz.id === "basics") {
+      const today = new Date().toDateString();
+      const completedToday = localStorage.getItem(`quiz_completed_basics_${today}`) === "true";
+      
+      if (completedToday) {
+        toast.info("You've already completed today's Stock Market Basics challenge! Come back tomorrow for new questions. 📅");
+        return;
+      }
+      
       const updatedQuiz = {
         ...quiz,
         questions: getDailyQuestions()
@@ -611,37 +619,50 @@ const Games = () => {
             <h2 className="text-xl font-semibold mb-4">Available Quizzes</h2>
             
             <div className="grid md:grid-cols-2 gap-4">
-              {mockQuizzes.map((quiz) => (
-                <Card key={quiz.id} className={completedQuizzes.includes(quiz.id) ? "border-learngreen-200" : ""}>
-                  <CardHeader>
-                    <div className="flex justify-between">
-                      <CardTitle>{quiz.title}</CardTitle>
-                      {completedQuizzes.includes(quiz.id) && (
-                        <Badge variant="outline" className="bg-learngreen-100 text-learngreen-700 border-learngreen-200">
-                          Completed
-                        </Badge>
+              {mockQuizzes.map((quiz) => {
+                const isDailyBasics = quiz.id === "basics";
+                const today = new Date().toDateString();
+                const completedToday = isDailyBasics ? localStorage.getItem(`quiz_completed_basics_${today}`) === "true" : false;
+                const isCompleted = completedQuizzes.includes(quiz.id) || completedToday;
+                
+                return (
+                  <Card key={quiz.id} className={isCompleted ? "border-learngreen-200" : ""}>
+                    <CardHeader>
+                      <div className="flex justify-between">
+                        <CardTitle>{quiz.title}</CardTitle>
+                        {isCompleted && (
+                          <Badge variant="outline" className="bg-learngreen-100 text-learngreen-700 border-learngreen-200">
+                            {completedToday ? "Completed Today" : "Completed"}
+                          </Badge>
+                        )}
+                      </div>
+                      <CardDescription>{quiz.description}</CardDescription>
+                    </CardHeader>
+                    
+                    <CardContent>
+                      <div className="flex justify-between text-sm">
+                        <span>Questions: {quiz.questions.length}</span>
+                        <span className="font-semibold text-learngreen-700">{quiz.points} points</span>
+                      </div>
+                      {isDailyBasics && completedToday && (
+                        <div className="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                          Come back tomorrow for 5 new questions! 📅
+                        </div>
                       )}
-                    </div>
-                    <CardDescription>{quiz.description}</CardDescription>
-                  </CardHeader>
-                  
-                  <CardContent>
-                    <div className="flex justify-between text-sm">
-                      <span>Questions: {quiz.questions.length}</span>
-                      <span className="font-semibold text-learngreen-700">{quiz.points} points</span>
-                    </div>
-                  </CardContent>
-                  
-                  <CardFooter>
-                    <Button 
-                      onClick={() => handleStartQuiz(quiz)}
-                      className="w-full bg-learngreen-600 hover:bg-learngreen-700"
-                    >
-                      {completedQuizzes.includes(quiz.id) ? "Play Again" : "Start Quiz"}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+                    </CardContent>
+                    
+                    <CardFooter>
+                      <Button 
+                        onClick={() => handleStartQuiz(quiz)}
+                        className="w-full bg-learngreen-600 hover:bg-learngreen-700"
+                        disabled={completedToday}
+                      >
+                        {completedToday ? "Completed Today" : isCompleted ? "Play Again" : "Start Quiz"}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
               
               {/* Coming Soon Placeholder */}
               <Card className="opacity-70 border-dashed">
@@ -753,12 +774,12 @@ const Games = () => {
       
       {/* Quiz Dialog */}
       <Dialog open={isQuizDialogOpen} onOpenChange={setIsQuizDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] p-0">
-          <DialogHeader className="p-6 pb-0">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-white z-50">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle>{selectedQuiz?.title}</DialogTitle>
           </DialogHeader>
           {selectedQuiz && (
-            <div className="p-6">
+            <div className="p-6 pt-4">
               <StockQuiz quiz={selectedQuiz} onComplete={handleQuizComplete} />
             </div>
           )}

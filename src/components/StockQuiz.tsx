@@ -108,8 +108,9 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   };
   
   return (
-    <Card className="w-full">
-      {!quizCompleted ? (
+    <div className="w-full max-h-[70vh] overflow-y-auto">
+      <Card className="w-full">
+        {!quizCompleted ? (
         <>
           <CardHeader>
             <CardTitle>{quiz.title}</CardTitle>
@@ -244,6 +245,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
         </>
       )}
     </Card>
+    </div>
   );
 };
 
