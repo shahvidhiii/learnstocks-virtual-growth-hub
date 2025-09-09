@@ -45,23 +45,23 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
     
     const isCorrect = selectedOption === currentQuestion.correctOption;
     setAnsweredCorrectly(isCorrect);
-    
-    if (isCorrect) {
-      setScore(score + 1);
-    }
   };
   
   const handleNextQuestion = () => {
+    // Update score before moving to next question or completing quiz
+    const currentScore = score + (answeredCorrectly ? 1 : 0);
+    
     if (currentQuestionIndex < quiz.questions.length - 1) {
+      setScore(currentScore);
       setCurrentQuestionIndex(currentQuestionIndex + 1);
       setSelectedOption(null);
       setAnsweredCorrectly(null);
     } else {
-      // Calculate the final score including the last question
-      const completeFinalScore = score + (answeredCorrectly ? 1 : 0);
-      setFinalScore(completeFinalScore);
+      // Quiz completed - use the current score as final score
+      setScore(currentScore);
+      setFinalScore(currentScore);
       setQuizCompleted(true);
-      processQuizCompletion(completeFinalScore);
+      processQuizCompletion(currentScore);
     }
   };
   
@@ -123,7 +123,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
             )}
             <div className="flex justify-between items-center">
               <span className="text-sm">Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
-              <span className="text-sm">Score: {score}</span>
+              <span className="text-sm">Score: {score + (answeredCorrectly ? 1 : 0)}</span>
             </div>
             <Progress value={progress} className="mt-2" />
           </CardHeader>
