@@ -11,6 +11,7 @@ import { GamepadIcon, Trophy, BookOpen, Brain, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Quiz } from "@/types";
 import { useBalanceStore } from "@/stores/balanceStore";
+import { useAuth } from "@/contexts/AuthContext";
 
 // All questions pool for Stock Market Basics
 const allBasicsQuestions = [
@@ -377,9 +378,9 @@ const allBasicsQuestions = [
 ];
 
 // Helper function to get daily questions (5 random questions per day)
-const getDailyQuestions = () => {
+const getDailyQuestions = (userId?: string) => {
   const today = new Date().toDateString();
-  const storageKey = `dailyQuestions_basics_${today}`;
+  const storageKey = userId ? `dailyQuestions_basics_${today}_${userId}` : `dailyQuestions_basics_${today}`;
   
   let dailyQuestions = localStorage.getItem(storageKey);
   
@@ -448,6 +449,7 @@ const Games = () => {
   const [totalPoints, setTotalPoints] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
   const { balance, addToBalance } = useBalanceStore();
+  const { user } = useAuth();
   
   useEffect(() => {
     // Handle incoming navigation requests
@@ -460,7 +462,7 @@ const Games = () => {
     // Check daily limit for basics quiz
     if (quiz.id === "basics") {
       const today = new Date().toDateString();
-      const completedToday = localStorage.getItem(`quiz_completed_basics_${today}`) === "true";
+      const completedToday = user ? localStorage.getItem(`quiz_completed_basics_${today}_${user.id}`) === "true" : false;
       
       if (completedToday) {
         toast.info("You've already completed today's Stock Market Basics challenge! Come back tomorrow for new questions. 📅");
@@ -469,7 +471,7 @@ const Games = () => {
       
       const updatedQuiz = {
         ...quiz,
-        questions: getDailyQuestions()
+        questions: getDailyQuestions(user?.id)
       };
       setSelectedQuiz(updatedQuiz);
     } else {
@@ -622,7 +624,7 @@ const Games = () => {
               {mockQuizzes.map((quiz) => {
                 const isDailyBasics = quiz.id === "basics";
                 const today = new Date().toDateString();
-                const completedToday = isDailyBasics ? localStorage.getItem(`quiz_completed_basics_${today}`) === "true" : false;
+                const completedToday = isDailyBasics && user ? localStorage.getItem(`quiz_completed_basics_${today}_${user.id}`) === "true" : false;
                 const isCompleted = completedQuizzes.includes(quiz.id) || completedToday;
                 
                 return (

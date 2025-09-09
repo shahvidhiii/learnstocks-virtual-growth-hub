@@ -33,7 +33,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   // Check if this is the daily basics quiz
   const isDailyBasics = quiz.id === "basics";
   const today = new Date().toDateString();
-  const completedToday = localStorage.getItem(`quiz_completed_basics_${today}`) === "true";
+  const completedToday = user ? localStorage.getItem(`quiz_completed_basics_${today}_${user.id}`) === "true" : false;
   
   const handleSelectOption = (index: number) => {
     if (answeredCorrectly !== null) return; // Don't allow changing after answering
@@ -71,8 +71,8 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
     
     try {
       // Mark daily quiz as completed
-      if (isDailyBasics) {
-        localStorage.setItem(`quiz_completed_basics_${today}`, "true");
+      if (isDailyBasics && user) {
+        localStorage.setItem(`quiz_completed_basics_${today}_${user.id}`, "true");
       }
       
       // Update the user's points in the database using the RPC function
