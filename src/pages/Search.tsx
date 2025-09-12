@@ -1,21 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import NavigationBar from "@/components/NavigationBar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Search as SearchIcon, RefreshCw } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Search as SearchIcon, LineChart, Shield, Box, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
-import StockPriceCard from "@/components/StockPriceCard";
+import { toast } from "sonner";
 
-const DEFAULT_STOCKS = [
-  'RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 
-  'ICICIBANK.NS', 'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS',
-  'ITC.NS', 'KOTAKBANK.NS'
+// NEW: A predefined list of popular Indian assets to show on page load
+const POPULAR_ASSETS = [
+  'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', // Stocks
+  'NIFTYBEES.NS', 'BANKBEES.NS', // ETFs
+  '0P0000XW6J.BO', // SBI Bluechip Fund (Example Mutual Fund)
 ];
 
-interface StockPrice {
+// Type for the search results from our Edge Function
+interface SearchResult {
+  symbol: string;
+  shortname?: string;
+  longname?: string;
+  quoteType: 'EQUITY' | 'ETF' | 'MUTUALFUND' | 'INDEX' | 'CURRENCY' | 'FUTURE';
+  exchange: string;
+}
+
+// NEW: Type for the fetched data of popular assets
+interface PopularAssetData {
   symbol: string;
   name: string;
   price: number;
@@ -23,305 +33,223 @@ interface StockPrice {
   changePercent: number;
 }
 
-const mockMutualFunds = [
-  {
-    id: "HDFC_MIDCAP",
-    symbol: "HDFCMIDCAP",
-    name: "HDFC Mid-Cap Opportunities Fund",
-    price: 92.45,
-    change: 0.75,
-    changePercent: 0.82,
-    category: "Mid Cap",
-    riskLevel: "Moderate",
-  },
-  {
-    id: "AXIS_BLUECHIP",
-    symbol: "AXISBLUECHIP",
-    name: "Axis Bluechip Fund",
-    price: 45.20,
-    change: 0.32,
-    changePercent: 0.71,
-    category: "Large Cap",
-    riskLevel: "Low",
-  },
-  {
-    id: "MIRAE_EMERGING",
-    symbol: "MIRAEEMERG",
-    name: "Mirae Asset Emerging Bluechip Fund",
-    price: 87.50,
-    change: -0.42,
-    changePercent: -0.48,
-    category: "Large & Mid Cap",
-    riskLevel: "Moderate",
-  },
-];
-
-const mockETFs = [
-  {
-    id: "NIFTYBEES",
-    symbol: "NIFTYBEES",
-    name: "Nippon India ETF Nifty BeES",
-    price: 213.75,
-    change: 1.25,
-    changePercent: 0.59,
-    category: "Index ETF",
-    aum: "3200 Cr",
-  },
-  {
-    id: "BANKBEES",
-    symbol: "BANKBEES",
-    name: "Nippon India ETF Bank BeES",
-    price: 378.90,
-    change: -2.30,
-    changePercent: -0.60,
-    category: "Sectoral ETF",
-    aum: "1520 Cr",
-  },
-];
-
 const Search = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [stockPrices, setStockPrices] = useState<StockPrice[]>([]);
-  const [searchResults, setSearchResults] = useState<StockPrice[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // NEW: State for the popular assets shown on page load
+  const [popularAssets, setPopularAssets] = useState<PopularAssetData[]>([]);
+  const [isLoadingPopular, setIsLoadingPopular] = useState(true);
 
-  const fetchStockPrices = async () => {
+  // NEW: useEffect to fetch data for the popular assets on initial page load
+  useEffect(() => {
+    const fetchPopularAssets = async () => {
+      setIsLoadingPopular(true);
+      try {
+        const promises = POPULAR_ASSETS.map(symbol =>
+          supabase.functions.invoke('get-stock-data', {
+            body: { symbol },
+          })
+        );
+        
+        const responses = await Promise.all(promises);
+
+        const fetchedAssets = responses
+          .filter(({ data, error }) => !error && data?.currentPrice)
+          .map(({ data }) => ({
+            symbol: data.symbol,
+            name: data.currentPrice.longName || data.currentPrice.shortName || data.symbol,
+            price: data.currentPrice.price || 0,
+            change: data.currentPrice.diff || 0,
+            changePercent: data.currentPrice.regularMarketChangePercent || 0,
+          }));
+
+        setPopularAssets(fetchedAssets);
+      } catch (error) {
+        console.error("Failed to fetch popular assets", error);
+        toast.error("Could not load popular assets.");
+      } finally {
+        setIsLoadingPopular(false);
+      }
+    };
+
+    fetchPopularAssets();
+  }, []);
+
+  // Debouncing logic for the search bar
+  useEffect(() => {
+    if (!searchQuery) {
+      setResults([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const debounceTimer = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery]);
+
+  // Main search function
+  const performSearch = async (query: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('stock-prices', {
-        body: {
-          symbols: DEFAULT_STOCKS
-        }
+      const { data, error } = await supabase.functions.invoke('search-assets', {
+        body: { query },
       });
-
-      if (error) {
-        console.error('Error fetching stock prices:', error);
-        return;
-      }
-
-      if (data?.prices) {
-        setStockPrices(data.prices);
-      }
-    } catch (error) {
-      console.error('Error fetching stock prices:', error);
+      if (error) throw error;
+      setResults(data.quotes || []);
+    } catch (error: any) {
+      console.error('Error searching assets:', error);
+      toast.error("Search failed", { description: error.message });
+      setResults([]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchStockPrices();
-    setRefreshing(false);
-  };
+  const stocks = useMemo(() => results.filter(r => r.quoteType === 'EQUITY'), [results]);
+  const etfs = useMemo(() => results.filter(r => r.quoteType === 'ETF'), [results]);
+  const mutualFunds = useMemo(() => results.filter(r => r.quoteType === 'MUTUALFUND'), [results]);
 
-  const handleSearch = () => {
-    if (!searchQuery) return;
-    
-    // Filter stocks based on search query
-    const results = stockPrices.filter((stock) => 
-      stock.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      stock.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    
-    setSearchResults(results);
-    setHasSearched(true);
-  };
-
-  useEffect(() => {
-    fetchStockPrices();
-    
-    // Refresh stock prices every 2 minutes
-    const interval = setInterval(fetchStockPrices, 120000);
-    return () => clearInterval(interval);
-  }, []);
-  
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       
       <main className="container mx-auto px-4 py-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Search Investments</h1>
-          <Button 
-            onClick={handleRefresh}
-            disabled={refreshing}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
-            {refreshing ? 'Updating...' : 'Refresh'}
-          </Button>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Search Investments</h1>
+          <p className="text-gray-500">Find real-time data for stocks, ETFs, and mutual funds.</p>
         </div>
         
-        {/* Search Bar */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex gap-2">
+        <div className="bg-white rounded-lg shadow p-4 mb-8 sticky top-[70px] z-10">
+          <div className="relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
-              placeholder="Search for stocks by symbol or name..."
+              placeholder="Search by name or symbol (e.g., RELIANCE.NS, NIFTYBEES)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="flex-1"
+              className="pl-10 h-12 text-lg"
             />
-            <Button 
-              onClick={handleSearch}
-              className="bg-learngreen-600 hover:bg-learngreen-700"
-              disabled={loading}
-            >
-              <SearchIcon className="h-4 w-4 mr-2" /> Search
-            </Button>
           </div>
         </div>
         
-        {/* Search Results */}
-        {hasSearched && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Search Results</h2>
-            
-            {searchResults.length > 0 ? (
-              <div className="grid gap-4">
-                {searchResults.map((stock) => (
-                  <StockPriceCard key={stock.symbol} stock={stock} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center p-8 bg-white rounded-lg shadow">
-                <div className="text-gray-500">No results found for "{searchQuery}"</div>
-                <div className="text-sm text-gray-400 mt-2">Try another search term or browse categories below</div>
-              </div>
-            )}
+        {isLoading && (
+          <div className="text-center p-8 text-gray-600">Searching...</div>
+        )}
+
+        {/* Show search results when user is typing */}
+        {!isLoading && searchQuery && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <Tabs defaultValue="stocks">
+              <TabsList className="w-full grid grid-cols-3">
+                <TabsTrigger value="stocks">Stocks ({stocks.length})</TabsTrigger>
+                <TabsTrigger value="mutual-funds">Mutual Funds ({mutualFunds.length})</TabsTrigger>
+                <TabsTrigger value="etfs">ETFs ({etfs.length})</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="stocks" className="p-4">
+                {stocks.length > 0 ? <div className="grid gap-4">{stocks.map((stock) => <SearchResultItem key={stock.symbol} item={stock} />)}</div> : <NoResultsFound />}
+              </TabsContent>
+              <TabsContent value="mutual-funds" className="p-4">
+                {mutualFunds.length > 0 ? <div className="grid gap-4">{mutualFunds.map((fund) => <SearchResultItem key={fund.symbol} item={fund} />)}</div> : <NoResultsFound />}
+              </TabsContent>
+              <TabsContent value="etfs" className="p-4">
+                {etfs.length > 0 ? <div className="grid gap-4">{etfs.map((etf) => <SearchResultItem key={etf.symbol} item={etf} />)}</div> : <NoResultsFound />}
+              </TabsContent>
+            </Tabs>
           </div>
         )}
         
-        {/* Live Stock Prices */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Live Stock Prices</CardTitle>
-            <CardDescription>
-              Real-time prices of major stocks (updates every 2 minutes)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {[...Array(8)].map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {stockPrices.map((stock) => (
-                  <StockPriceCard key={stock.symbol} stock={stock} />
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        {/* Browse Categories */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <Tabs defaultValue="stocks">
-            <TabsList className="w-full grid grid-cols-3">
-              <TabsTrigger value="stocks">Stocks</TabsTrigger>
-              <TabsTrigger value="mutual-funds">Mutual Funds</TabsTrigger>
-              <TabsTrigger value="etfs">ETFs</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="stocks" className="p-4">
-              <h3 className="font-medium mb-4">Popular Stocks (Real-time Data)</h3>
-              <div className="grid gap-4">
-                {loading ? (
-                  [...Array(5)].map((_, i) => (
-                    <Card key={i} className="animate-pulse">
-                      <CardContent className="p-4">
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gray-200 rounded"></div>
-                          <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                ) : (
-                  stockPrices.slice(0, 5).map((stock) => (
-                    <StockPriceCard key={stock.symbol} stock={stock} />
-                  ))
-                )}
-              </div>
-              <Button 
-                variant="outline" 
-                className="w-full mt-4"
-                onClick={() => setHasSearched(false)}
-              >
-                View All Stocks Above
-              </Button>
-            </TabsContent>
-            
-            <TabsContent value="mutual-funds" className="p-4">
-              <h3 className="font-medium mb-4">Popular Mutual Funds</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Note: Mutual fund data is currently static. Real-time integration coming soon.
-              </p>
-              <div className="grid gap-4">
-                {mockMutualFunds.map((fund) => (
-                  <div key={fund.id} className="border p-4 rounded-lg">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">{fund.name}</h4>
-                        <div className="text-sm text-gray-500">{fund.category} | Risk: {fund.riskLevel}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">₹{fund.price}</div>
-                        <div className={fund.change >= 0 ? "text-green-600" : "text-red-600"}>
-                          {fund.change >= 0 ? "+" : ""}{fund.changePercent.toFixed(2)}%
-                        </div>
-                      </div>
+        {/* NEW: Show popular assets when search bar is empty */}
+        {!searchQuery && !isLoading && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Popular Stocks</CardTitle>
+              <CardDescription>Here are some of the most-watched assets in the Indian market.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingPopular ? (
+                // Loading Skeleton
+                <div className="grid md:grid-cols-2 gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="border p-4 rounded-lg animate-pulse">
+                      <div className="h-5 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                     </div>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="w-full mt-4">View All Mutual Funds</Button>
-            </TabsContent>
-            
-            <TabsContent value="etfs" className="p-4">
-              <h3 className="font-medium mb-4">Popular ETFs</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Note: ETF data is currently static. Real-time integration coming soon.
-              </p>
-              <div className="grid gap-4">
-                {mockETFs.map((etf) => (
-                  <div key={etf.id} className="border p-4 rounded-lg">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-medium">{etf.name}</h4>
-                        <div className="text-sm text-gray-500">{etf.category} | AUM: {etf.aum}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">₹{etf.price}</div>
-                        <div className={etf.change >= 0 ? "text-green-600" : "text-red-600"}>
-                          {etf.change >= 0 ? "+" : ""}{etf.changePercent.toFixed(2)}%
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="w-full mt-4">View All ETFs</Button>
-            </TabsContent>
-          </Tabs>
-        </div>
+                  ))}
+                </div>
+              ) : (
+                // Actual Data
+                <div className="grid md:grid-cols-2 gap-4">
+                  {popularAssets.map((asset) => (
+                    <PopularAssetCard key={asset.symbol} asset={asset} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );
 };
+
+// Component for displaying a single search result
+const SearchResultItem = ({ item }: { item: SearchResult }) => {
+  const getIcon = (quoteType: SearchResult['quoteType']) => {
+    switch (quoteType) {
+      case 'EQUITY': return <LineChart className="h-5 w-5 text-blue-500" />;
+      case 'ETF': return <Box className="h-5 w-5 text-green-500" />;
+      case 'MUTUALFUND': return <Shield className="h-5 w-5 text-purple-500" />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="border p-4 rounded-lg hover:bg-gray-50 transition-colors">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="bg-gray-100 p-2 rounded-full">{getIcon(item.quoteType)}</div>
+          <div>
+            <h4 className="font-semibold text-gray-800">{item.shortname || item.longname}</h4>
+            <div className="text-sm text-gray-500">{item.symbol} | {item.exchange}</div>
+          </div>
+        </div>
+        <Button variant="outline" size="sm">View Details</Button>
+      </div>
+    </div>
+  );
+};
+
+// NEW: A dedicated component to display a popular asset card
+const PopularAssetCard = ({ asset }: { asset: PopularAssetData }) => {
+  const isPositive = asset.change >= 0;
+  return (
+    <div className="border p-4 rounded-lg">
+      <div className="flex justify-between items-start">
+        <div>
+          <h4 className="font-semibold text-gray-800">{asset.symbol}</h4>
+          <p className="text-sm text-gray-500 truncate max-w-[200px]">{asset.name}</p>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <p className="font-bold text-lg">₹{asset.price.toFixed(2)}</p>
+          <div className={`flex items-center justify-end text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+            {isPositive ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
+            <span>{asset.change.toFixed(2)} ({asset.changePercent.toFixed(2)}%)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const NoResultsFound = () => (
+  <div className="text-center p-8 text-gray-500">
+    <p>No results of this type found for the current search.</p>
+  </div>
+);
 
 export default Search;
