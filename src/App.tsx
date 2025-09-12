@@ -17,6 +17,9 @@ import More from "./pages/More";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
+// ✅ Import the new StockDetail page
+import StockDetail from "./pages/StockDetail";
+
 const queryClient = new QueryClient();
 
 // Protected route component
@@ -65,11 +68,21 @@ const App = () => (
                 <Games />
               </ProtectedRoute>
             } />
+            
+            {/* ✅ Predictions list */}
             <Route path="/predictions" element={
               <ProtectedRoute>
                 <Predictions />
               </ProtectedRoute>
             } />
+
+            {/* ✅ Stock detail (dynamic route) */}
+            <Route path="/predictions/:symbol" element={
+              <ProtectedRoute>
+                <StockDetail />
+              </ProtectedRoute>
+            } />
+
             <Route path="/psg" element={
               <ProtectedRoute>
                 <PSG />
@@ -95,7 +108,8 @@ const App = () => (
                 <More />
               </ProtectedRoute>
             } />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+
+            {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
