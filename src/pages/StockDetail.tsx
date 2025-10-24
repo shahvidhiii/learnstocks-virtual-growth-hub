@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  LineChart, Line, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, YAxis, XAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { TrendingUp, TrendingDown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ const StockDetail = () => {
   const { symbol } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(90); // Default to 90 days for a better initial view
   const [prediction, setPrediction] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [predicting, setPredicting] = useState(false);
@@ -29,7 +29,7 @@ const StockDetail = () => {
     const fetchStockData = async () => {
       if (!symbol) return;
       setLoading(true);
-      setPrediction(null);
+      setPrediction(null); // Clear previous prediction when data changes
       try {
         const { data, error } = await supabase.functions.invoke('get-stock-data', {
           body: { symbol, days },
@@ -45,6 +45,7 @@ const StockDetail = () => {
 
       } catch (err) {
         console.error('Error fetching stock data:', err);
+        toast.error("Failed to fetch stock data.");
         setStockData([]);
       }
       setLoading(false);
@@ -58,10 +59,9 @@ const StockDetail = () => {
       return;
     }
 
-    setPredicting(true); // Disable the button
+    setPredicting(true);
 
     try {
-      // The URL now points directly to your local Python server
       const pythonApiUrl = 'http://localhost:8000/predict';
 
       const requestBody = {
@@ -79,7 +79,6 @@ const StockDetail = () => {
       });
 
       if (!response.ok) {
-        // If we get an error, try to read the response text
         const errorText = await response.text();
         throw new Error(`Prediction API failed: ${errorText}`);
       }
@@ -98,24 +97,25 @@ const StockDetail = () => {
         description: err.message || "Please check the Python terminal for errors.",
       });
     } finally {
-      // This will ensure the button is never stuck
-      setPredicting(false); // Re-enable the button
+      setPredicting(false);
     }
   };
 
   const lastClose = stockData.length ? stockData[stockData.length - 1].close : null;
   const shouldBuy = lastClose !== null && prediction !== null ? prediction > lastClose : null;
 
-  const chartData = prediction !== null 
-    ? [...stockData, { date: 'Pred.', close: prediction }] 
+  // Append prediction to chart data if available
+  const chartData = prediction !== null
+    ? [...stockData, { date: 'Pred.', close: prediction }]
     : stockData;
 
+  // Custom Tooltip for the chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-2 border border-gray-200 rounded-md shadow-lg text-gray-800">
-          <p className="font-bold">{`Date: ${label}`}</p>
-          <p>{`Close: ₹${payload[0].value.toFixed(2)}`}</p>
+        <div className="bg-white p-3 border border-gray-300 rounded-lg shadow-lg text-gray-800">
+          <p className="font-bold text-sm">{label === 'Pred.' ? `Prediction` : `Date: ${label}`}</p>
+          <p className="text-learngreen-600">{`Price: ₹${payload[0].value.toFixed(2)}`}</p>
         </div>
       );
     }
@@ -129,7 +129,7 @@ const StockDetail = () => {
         <Button
           variant="ghost"
           onClick={() => navigate('/predictions')}
-          className="mb-4"
+          className="mb-4 text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft size={16} className="mr-2" />
           Back to Predictions
@@ -153,7 +153,7 @@ const StockDetail = () => {
             <Button
                 onClick={handlePredict}
                 disabled={predicting || loading}
-                className="bg-learngreen-600 hover:bg-learngreen-700"
+                className="bg-learngreen-600 hover:bg-learngreen-700 disabled:opacity-50"
             >
                 {predicting ? "Predicting..." : "Run AI Prediction"}
             </Button>
@@ -166,32 +166,65 @@ const StockDetail = () => {
                 </div>
             ) : stockData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <YAxis domain={['dataMin - 5', 'dataMax + 5']} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="close" stroke="#10b981" strokeWidth={2} dot={false} />
-                    {prediction !== null && (
-                      <Line type="monotone" dataKey="close" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" />
-                    )}
-                </LineChart>
+                    <LineChart 
+                        data={chartData} 
+                        margin={{ top: 5, right: 20, left: 10, bottom: 30 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                        <XAxis 
+                            dataKey="date"
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                            interval="preserveStartEnd"
+                            tick={{ fill: '#6b7280', fontSize: 12 }}
+                        />
+                        <YAxis 
+                            domain={['dataMin - 10', 'dataMax + 10']}
+                            tickFormatter={(value) => `₹${Math.round(value)}`}
+                            tick={{ fill: '#6b7280', fontSize: 12 }}
+                            width={70}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Line 
+                            type="monotone" 
+                            dataKey="close" 
+                            stroke="#10b981" 
+                            strokeWidth={2} 
+                            dot={false} 
+                            name="Close Price"
+                        />
+                        {prediction !== null && (
+                            <Line 
+                                type="monotone" 
+                                dataKey="close" 
+                                stroke="#f59e0b" 
+                                strokeWidth={2} 
+                                strokeDasharray="5 5" 
+                                name="Prediction"
+                            />
+                        )}
+                    </LineChart>
                 </ResponsiveContainer>
             ) : (
-                <div className="text-center text-gray-500 flex justify-center items-center h-full">No data available for {symbol}</div>
+                <div className="text-center text-gray-500 flex justify-center items-center h-full">
+                    No data available for {symbol}
+                </div>
             )}
           </CardContent>
         </Card>
         {shouldBuy !== null && (
-        <Card className={`mt-6 ${shouldBuy ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"}`}>
+        <Card className={`mt-6 ${shouldBuy ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
             <CardContent className="p-4 flex items-center gap-4">
-                {shouldBuy ? <TrendingUp size={28} className="text-green-600"/> : <TrendingDown size={28} className="text-yellow-600"/>}
+                {shouldBuy ? <TrendingUp size={28} className="text-green-600"/> : <TrendingDown size={28} className="text-red-600"/>}
                 <div>
-                  <p className="font-bold text-gray-800">
-                    Predicted Price: <span className="text-xl">₹{prediction?.toFixed(2)}</span>
-                  </p>
-                  <p className={`font-semibold mt-1 ${shouldBuy ? "text-green-700" : "text-yellow-700"}`}>
-                      Recommendation: {shouldBuy ? 'BUY' : 'HOLD'}
-                  </p>
+                    <p className="font-bold text-gray-800">
+                        Predicted Price: <span className="text-xl">₹{prediction?.toFixed(2)}</span>
+                    </p>
+                    <p className={`font-semibold mt-1 ${shouldBuy ? "text-green-700" : "text-red-700"}`}>
+                        {/* Updated Recommendation Logic */}
+                        Recommendation: {shouldBuy ? 'BUY' : 'SELL / HOLD'}
+                    </p>
                 </div>
             </CardContent>
         </Card>
