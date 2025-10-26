@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -18,17 +17,58 @@ interface StockQuizProps {
 }
 
 const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0); // used only for display ordering
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [score, setScore] = useState(0);
   const [finalScore, setFinalScore] = useState(0);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Adaptive quiz state
+  const [askedIds, setAskedIds] = useState<string[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
+  const [currentDifficulty, setCurrentDifficulty] = useState<"Easy" | "Medium" | "Difficult">("Easy");
+
+  // --- FIX 2: This is the number of questions to ASK (e.g., 5) ---
+  // We check for the custom 'totalQuestionsToAsk' prop you'll add to the quiz object.
+  // We default to the full array length for backward compatibility.
+  const totalQuestions = (quiz as any).totalQuestionsToAsk || quiz.questions.length;
+  
+  // Build pools grouped by difficulty for selection
+  const buildPools = () => {
+    const pools: Record<string, QuizQuestion[]> = { Easy: [], Medium: [], Difficult: [] };
+    
+    // --- FIX 2: This now uses the FULL quiz.questions array (e.g., all 100) ---
+    // This ensures the pools are fully populated.
+    quiz.questions.forEach((q) => {
+      const d = (q as any).difficulty || "Medium"; // default to Medium if missing
+      if (!pools[d]) pools[d] = [];
+      pools[d].push(q);
+    });
+    return pools as Record<"Easy" | "Medium" | "Difficult", QuizQuestion[]>;
+  };
+
+  const pools = buildPools();
+
+  // Initialize first question when component mounts
+  useEffect(() => {
+    if (currentQuestion) return;
+    const first = pickNextQuestion(currentDifficulty, askedIds) || quiz.questions[0] || null;
+    
+    if (first) {
+      setCurrentQuestion(first);
+      // --- FIX 1: Set difficulty based on the *actual* first question ---
+      const actualDifficulty = (first as any).difficulty || "Medium";
+      setCurrentDifficulty(actualDifficulty);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
   const { user } = useAuth();
   
-  const currentQuestion = quiz.questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quiz.questions.length) * 100;
+  // --- FIX 2: Progress is based on totalQuestions (e.g., 5) ---
+  const progress = ((askedIds.length + (quizCompleted ? 0 : (currentQuestion ? 1 : 0))) / totalQuestions) * 100;
   
   // Check if this is the daily basics quiz
   const isDailyBasics = quiz.id === "basics";
@@ -42,27 +82,96 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   
   const handleCheckAnswer = () => {
     if (selectedOption === null) return;
-    
+    if (!currentQuestion) return;
+
     const isCorrect = selectedOption === currentQuestion.correctOption;
     setAnsweredCorrectly(isCorrect);
   };
   
   const handleNextQuestion = () => {
-    // Update score before moving to next question or completing quiz
-    const currentScore = score + (answeredCorrectly ? 1 : 0);
-    
-    if (currentQuestionIndex < quiz.questions.length - 1) {
-      setScore(currentScore);
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedOption(null);
-      setAnsweredCorrectly(null);
-    } else {
-      // Quiz completed - use the current score as final score
-      setScore(currentScore);
-      setFinalScore(currentScore);
-      setQuizCompleted(true);
-      processQuizCompletion(currentScore);
+    // Update score
+    const gained = answeredCorrectly ? 1 : 0;
+    const newScore = score + gained;
+    setScore(newScore);
+
+    // mark current question as asked (use local copy so we can compute next question deterministically)
+    const newAskedIds = currentQuestion ? [...askedIds, currentQuestion.id] : [...askedIds];
+    setAskedIds(newAskedIds);
+
+    // --- FIX 1: This logic is all correct ---
+    // 1. Determine the TARGET difficulty using local var
+    let targetDifficulty: "Easy" | "Medium" | "Difficult" = currentDifficulty;
+    // Easy: correct -> Medium, incorrect -> stay Easy
+    // Medium: correct -> Difficult, incorrect -> Easy
+    // Difficult: correct -> stay Difficult, incorrect -> Medium
+    if (currentDifficulty === "Easy") {
+      targetDifficulty = answeredCorrectly ? "Medium" : "Easy";
+    } else if (currentDifficulty === "Medium") {
+      targetDifficulty = answeredCorrectly ? "Difficult" : "Easy";
+    } else if (currentDifficulty === "Difficult") {
+      targetDifficulty = answeredCorrectly ? "Difficult" : "Medium";
     }
+    
+    // Clear selected option & answered flag for next question
+    setSelectedOption(null);
+    setAnsweredCorrectly(null);
+
+    // --- FIX 2: Check completion against totalQuestions (e.g., 5) ---
+    const answeredCount = newAskedIds.length;
+    if (answeredCount >= totalQuestions) {
+      setFinalScore(newScore);
+      setQuizCompleted(true);
+      processQuizCompletion(newScore);
+      return;
+    }
+
+    // 2. pick next question based on computed targetDifficulty
+    // The pools are now full (e.g., 100 questions), so this will work.
+    let nextQuestion = pickNextQuestion(targetDifficulty, newAskedIds);
+    
+    if (!nextQuestion) {
+      // fallback: find any unasked question from the full list
+      nextQuestion = quiz.questions.find((q) => !newAskedIds.includes(q.id) && q.id !== currentQuestion?.id) || null;
+    }
+
+    // --- FIX 1: Set state based on the ACTUAL question that was picked ---
+    if (nextQuestion) {
+      setCurrentQuestion(nextQuestion);
+      
+      // Update the difficulty state to match the *actual* question we just picked.
+      const actualDifficulty = (nextQuestion as any).difficulty || "Medium";
+      setCurrentDifficulty(actualDifficulty);
+
+      setCurrentQuestionIndex((i) => i + 1);
+    } else {
+      // no more questions
+      setFinalScore(newScore);
+      setQuizCompleted(true);
+      processQuizCompletion(newScore);
+    }
+  };
+
+  // Pick next question by prioritized difficulty order (prefer target, then sensible neighbors)
+  // This function is correct. It now searches the full pools.
+  const pickNextQuestion = (difficulty: "Easy" | "Medium" | "Difficult", alreadyAsked: string[]) => {
+    const orderMap: Record<string, ("Easy" | "Medium" | "Difficult")[]> = {
+      Easy: ["Easy", "Medium", "Difficult"],
+      Medium: ["Medium", "Easy", "Difficult"],
+      Difficult: ["Difficult", "Medium", "Easy"],
+    };
+
+    const order = orderMap[difficulty] || ["Medium", "Easy", "Difficult"];
+
+    for (const d of order) {
+      const pool = pools[d] || [];
+      const candidates = pool.filter((q) => !alreadyAsked.includes(q.id) && q.id !== currentQuestion?.id);
+      if (candidates.length > 0) {
+        const idx = Math.floor(Math.random() * candidates.length);
+        return candidates[idx];
+      }
+    }
+
+    return null;
   };
   
   const processQuizCompletion = async (totalScore: number) => {
@@ -98,10 +207,11 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
   };
   
   const calculateFinalScore = (totalScore: number) => {
-    const percentage = (totalScore / quiz.questions.length) * 100;
+    // --- FIX 2: Calculate percentage based on totalQuestions (e.g., 5) ---
+    const percentage = (totalScore / totalQuestions) * 100;
     return {
       correct: totalScore,
-      total: quiz.questions.length,
+      total: totalQuestions, // Use totalQuestions here
       percentage: percentage.toFixed(0),
       points: Math.round((percentage / 100) * quiz.points)
     };
@@ -114,15 +224,20 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
         <>
           <CardHeader>
             <CardTitle>{quiz.title}</CardTitle>
+            {currentQuestion && (
+              <div className="text-sm text-gray-600">Difficulty: {((currentQuestion as any).difficulty) || currentDifficulty}</div>
+            )}
             {isDailyBasics && (
               <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-2">
                 <p className="text-sm text-blue-700">
-                  🌟 Daily Challenge: 5 questions selected just for you today!
+                  {/* --- FIX 2: Update text to use totalQuestions --- */}
+                  🌟 Daily Challenge: {totalQuestions} questions selected just for you today!
                 </p>
               </div>
             )}
             <div className="flex justify-between items-center">
-              <span className="text-sm">Question {currentQuestionIndex + 1} of {quiz.questions.length}</span>
+              {/* --- FIX 2: Update text to use totalQuestions --- */}
+              <span className="text-sm">Question {currentQuestionIndex + 1} of {totalQuestions}</span>
               <span className="text-sm">Score: {score + (answeredCorrectly ? 1 : 0)}</span>
             </div>
             <Progress value={progress} className="mt-2" />
@@ -130,10 +245,10 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
           
           <CardContent>
             <div className="space-y-4">
-              <h3 className="font-medium text-lg">{currentQuestion.text}</h3>
+              <h3 className="font-medium text-lg">{currentQuestion?.text}</h3>
               
               <RadioGroup value={selectedOption?.toString()} className="space-y-2">
-                {currentQuestion.options.map((option, index) => (
+                {currentQuestion?.options.map((option, index) => (
                   <div
                     key={index}
                     className={cn(
@@ -170,7 +285,7 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                   <p className="font-medium mb-1">
                     {answeredCorrectly ? "Correct!" : "Incorrect!"}
                   </p>
-                  <p className="text-sm">{currentQuestion.explanation}</p>
+                  <p className="text-sm">{currentQuestion?.explanation}</p>
                 </div>
               )}
             </div>
@@ -190,7 +305,8 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                 onClick={handleNextQuestion}
                 className="bg-learngreen-600 hover:bg-learngreen-700"
               >
-                {currentQuestionIndex < quiz.questions.length - 1 ? "Next Question" : "Finish Quiz"}
+                {/* --- FIX 2: Update text to use totalQuestions --- */}
+                {currentQuestionIndex < totalQuestions - 1 ? "Next Question" : "Finish Quiz"}
               </Button>
             )}
           </CardFooter>
@@ -208,7 +324,8 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                   {calculateFinalScore(finalScore).percentage}%
                 </div>
                 <p className="text-xl">
-                  You got {finalScore} out of {quiz.questions.length} questions right
+                  {/* --- FIX 2: Update text to use totalQuestions --- */}
+                  You got {finalScore} out of {totalQuestions} questions right
                 </p>
               </div>
               
@@ -218,7 +335,8 @@ const StockQuiz = ({ quiz, onComplete }: StockQuizProps) => {
                 </p>
                 {isDailyBasics && (
                   <p className="text-sm text-learngreen-600 mt-1">
-                    Come back tomorrow for 5 new questions! 📅
+                    {/* --- FIX 2: Update text to use totalQuestions --- */}
+                    Come back tomorrow for {totalQuestions} new questions! 📅
                   </p>
                 )}
               </div>

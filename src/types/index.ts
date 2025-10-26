@@ -61,6 +61,8 @@ export type QuizQuestion = {
   options: string[];
   correctOption: number;
   explanation: string;
+  // Difficulty helps drive adaptive quiz flow. Values used in question pools: "Easy", "Medium", "Difficult"
+  difficulty?: "Easy" | "Medium" | "Difficult";
 }
 
 export type Prediction = {
