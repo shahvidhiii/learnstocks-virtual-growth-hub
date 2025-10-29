@@ -28,9 +28,15 @@ serve(async (req) => {
     // ✅ Fetch current quote
     const quote = await yahooFinance.quote(symbol);
 
+    // Include additional fields so clients can compute % change and show names
     const currentPrice = {
       price: quote.regularMarketPrice,
       diff: quote.regularMarketChange,
+      regularMarketChangePercent: quote.regularMarketChangePercent,
+      previousClose: quote.regularMarketPreviousClose,
+      shortName: quote.shortName,
+      longName: quote.longName,
+      symbol: quote.symbol,
     };
 
     let historicalData: { date: string; close: number }[] = [];

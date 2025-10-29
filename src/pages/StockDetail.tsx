@@ -1,5 +1,8 @@
 import { toast } from "sonner";
 import React, { useEffect, useState } from "react";
+import useLivePrices from "@/hooks/useLivePrices";
+import TradeDialog from "@/components/TradeDialog";
+import { usePortfolioStore } from "@/stores/portfolioStore";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   LineChart, Line, YAxis, XAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -20,6 +23,10 @@ const StockDetail = () => {
   const { symbol } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
   const [stockData, setStockData] = useState<StockDataPoint[]>([]);
+  const [currentPrice, setCurrentPrice] = useState<any | null>(null);
+  const [isTradeOpen, setIsTradeOpen] = useState(false);
+  const [tradeAction, setTradeAction] = useState<'buy' | 'sell'>('buy');
+  const [selectedTradeStock, setSelectedTradeStock] = useState<any | null>(null);
   const [days, setDays] = useState(90); // Default to 90 days for a better initial view
   const [prediction, setPrediction] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,11 +44,13 @@ const StockDetail = () => {
 
         if (error) throw error;
 
-        const formattedData = data.historicalData.map((item: { date: string, close: number }) => ({
-            ...item,
-            date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        }));
-        setStockData(formattedData);
+    // store current price (if present) and historical data for chart
+    if (data?.currentPrice) setCurrentPrice(data.currentPrice);
+    const formattedData = (data.historicalData || []).map((item: { date: string, close: number }) => ({
+      ...item,
+      date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    }));
+    setStockData(formattedData);
 
       } catch (err) {
         console.error('Error fetching stock data:', err);
@@ -52,6 +61,64 @@ const StockDetail = () => {
     };
     fetchStockData();
   }, [symbol, days]);
+
+  // live price helper
+  const { prices, fetchPrices } = useLivePrices([], 5000);
+  const buyStock = usePortfolioStore((s) => s.buyStock);
+  const sellStock = usePortfolioStore((s) => s.sellStock);
+
+  const openTrade = async (action: 'buy' | 'sell') => {
+    if (!symbol) return;
+    const ns = `${symbol}.NS`;
+    const fetched = await fetchPrices([ns]);
+    const live = fetched?.[symbol] || prices?.[symbol];
+    const priceToUse = live?.price ?? currentPrice?.price ?? 0;
+    const stockObj = {
+      id: symbol,
+      symbol: symbol,
+      name: currentPrice?.shortName || currentPrice?.longName || symbol,
+      price: priceToUse,
+      change: live?.change ?? currentPrice?.diff ?? 0,
+      changePercent: live?.changePercent ?? currentPrice?.regularMarketChangePercent ?? 0,
+    };
+    setSelectedTradeStock(stockObj);
+    setTradeAction(action);
+    setIsTradeOpen(true);
+  };
+
+  const onConfirmTrade = async (qty: number) => {
+    if (!selectedTradeStock) return;
+    const priceToUse = selectedTradeStock.price;
+    let ok = false;
+    if (tradeAction === 'buy') {
+      ok = buyStock(selectedTradeStock, qty, priceToUse);
+      if (ok) toast.success(`Bought ${qty} ${selectedTradeStock.symbol} @ ₹${priceToUse.toFixed(2)}`);
+      else toast.error('Buy failed: insufficient balance or invalid quantity');
+    } else {
+      ok = sellStock(selectedTradeStock.id, qty, priceToUse);
+      if (ok) toast.success(`Sold ${qty} ${selectedTradeStock.symbol} @ ₹${priceToUse.toFixed(2)}`);
+      else toast.error('Sell failed: invalid qty');
+    }
+
+    if (ok) {
+      try {
+        // append a history snapshot
+        const portfolio = usePortfolioStore.getState();
+        const balanceNow = (await import("@/stores/balanceStore")).useBalanceStore.getState().balance;
+        const combined = { ...(prices || {}) };
+        const totalValue = balanceNow + portfolio.holdings.reduce((s, h) => {
+          const p = combined[h.symbol]?.price ?? h.avgBuyPrice;
+          return s + h.quantity * p;
+        }, 0);
+        usePortfolioStore.getState().addHistoryPoint(totalValue);
+      } catch (err) {
+        console.error('Failed to append history point after trade', err);
+      }
+    }
+
+    setIsTradeOpen(false);
+    setSelectedTradeStock(null);
+  };
 
   const handlePredict = async () => {
     if (!stockData.length || !symbol) {
@@ -140,6 +207,23 @@ const StockDetail = () => {
             </h1>
             <p className="text-gray-500">Historical data and AI-powered price prediction.</p>
         </div>
+        {/* Summary card with live price */}
+        {currentPrice && (
+          <div className="mb-4 bg-white p-4 rounded-lg shadow flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-500">{currentPrice.shortName || currentPrice.longName || symbol}</div>
+              <div className="text-2xl font-bold">₹{(currentPrice.price ?? 0).toFixed(2)}</div>
+              <div className={`text-sm ${currentPrice.diff >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {currentPrice.diff >= 0 ? '+' : ''}{(currentPrice.diff ?? 0).toFixed(2)} ({(currentPrice.regularMarketChangePercent ?? 0).toFixed(2)}%)
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={() => openTrade('buy')} className="bg-learngreen-600 hover:bg-learngreen-700">Buy</Button>
+              <Button variant="outline" onClick={() => openTrade('sell')}>Sell</Button>
+            </div>
+          </div>
+        )}
         <div className="mb-6 flex flex-col md:flex-row gap-4 items-start md:items-center">
             <select
                 value={days}
@@ -213,6 +297,19 @@ const StockDetail = () => {
             )}
           </CardContent>
         </Card>
+        {/* Mobile fixed CTA bar */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 p-3 bg-white border-t flex gap-2">
+          <Button className="flex-1 bg-learngreen-600" onClick={() => openTrade('buy')}>Buy</Button>
+          <Button variant="outline" className="flex-1" onClick={() => openTrade('sell')}>Sell</Button>
+        </div>
+
+        <TradeDialog
+          open={isTradeOpen}
+          onOpenChange={setIsTradeOpen}
+          stock={selectedTradeStock}
+          action={tradeAction}
+          onConfirm={onConfirmTrade}
+        />
         {shouldBuy !== null && (
         <Card className={`mt-6 ${shouldBuy ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
             <CardContent className="p-4 flex items-center gap-4">

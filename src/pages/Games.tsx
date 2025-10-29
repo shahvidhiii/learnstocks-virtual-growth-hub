@@ -9,8 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { GamepadIcon, Trophy, BookOpen, Brain, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Quiz, QuizQuestion } from "@/types";
+import mockStocks from "@/data/mockStocks";
+import TradeDialog from "@/components/TradeDialog";
+import { usePortfolioStore } from "@/stores/portfolioStore";
 import { useBalanceStore } from "@/stores/balanceStore";
 import { useAuth } from "@/contexts/AuthContext";
+import StockCard from "@/components/StockCard";
+import useLivePrices from "@/hooks/useLivePrices";
 
 // ==                         QUESTION POOLS                          ==
 
@@ -288,8 +293,17 @@ const Games = () => {
   const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
   const [totalPoints, setTotalPoints] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
+  // Simulator state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStock, setSelectedStock] = useState<any | null>(null);
+  const [isTradeDialogOpen, setIsTradeDialogOpen] = useState(false);
+  const [tradeAction, setTradeAction] = useState<"buy" | "sell">("buy");
+  const buyStock = usePortfolioStore((s) => s.buyStock);
+  const addHistoryPoint = usePortfolioStore((s) => s.addHistoryPoint);
+  const trades = usePortfolioStore((s) => s.trades);
   const { addToBalance } = useBalanceStore();
   const { user } = useAuth();
+  const { prices, fetchPrices, setSymbols } = useLivePrices([], 5000);
 
   // Dynamically build quizzes using the large question pools
   const mockQuizzes: Quiz[] = [
@@ -347,6 +361,18 @@ const Games = () => {
     setSelectedQuiz(updatedQuiz);
     setIsQuizDialogOpen(true);
   };
+
+  const filteredStocks = mockStocks.filter((s) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+  });
+
+  // keep live prices updated for displayed stocks
+  useEffect(() => {
+    const syms = filteredStocks.map(s => `${s.symbol}.NS`);
+    setSymbols(syms);
+  }, [searchQuery]);
 
   const handleQuizComplete = (score: number) => {
     if (!selectedQuiz || !user) return;
@@ -473,17 +499,98 @@ const Games = () => {
         )}
 
         {activeCategory === "simulator" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Trading Simulator</CardTitle>
-              <CardDescription>This feature is currently under development. Check back soon!</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center text-center text-gray-500 py-16">
-              <Brain className="h-16 w-16 text-gray-300 mb-4" />
-              <p className="font-semibold">Practice makes perfect!</p>
-              <p>Our realistic trading simulator is coming soon.</p>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Trading Simulator</CardTitle>
+                <CardDescription>Search stocks and buy with your virtual balance.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <input
+                    className="w-full border p-2 rounded"
+                    placeholder="Search by symbol or name (e.g. RELIANCE)"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchQuery}
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                    {filteredStocks.map((stock) => {
+                      const live = prices[stock.symbol];
+                      const display = { ...stock, price: live ? live.price : stock.price };
+                      return (
+                        <div key={stock.id} onClick={() => { setSelectedStock(display); setTradeAction('buy'); setIsTradeDialogOpen(true); }}>
+                          <StockCard stock={display} />
+                        </div>
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Trades</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {trades.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">No trades yet. Buy a stock to see it here.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {trades.map((t) => (
+                      <div key={t.id} className="flex justify-between items-center p-2 border rounded">
+                        <div>
+                          <div className="font-medium">{t.symbol} • {t.type}</div>
+                          <div className="text-sm text-gray-500">{new Date(t.date).toLocaleString()}</div>
+                        </div>
+                        <div className="text-right">
+                          <div>Qty: {t.quantity}</div>
+                          <div>₹{t.price.toFixed(2)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+              <TradeDialog
+              open={isTradeDialogOpen}
+              onOpenChange={setIsTradeDialogOpen}
+              stock={selectedStock}
+              action={tradeAction}
+              onConfirm={(qty) => {
+                if (!selectedStock) return;
+                if (tradeAction === 'buy') {
+                  (async () => {
+                    const symbolWithNs = `${selectedStock.symbol}.NS`;
+                    const fetched = await fetchPrices([symbolWithNs]);
+                    const live = fetched[selectedStock.symbol] || prices[selectedStock.symbol];
+                    const priceToUse = live ? live.price : selectedStock.price;
+                    const ok = buyStock(selectedStock, qty, priceToUse);
+                    if (ok) {
+                      toast.success(`Bought ${qty} ${selectedStock.symbol} @ ₹${priceToUse.toFixed(2)}`);
+                      try {
+                        // Combine fetched prices with currently polled prices
+                        const combined = { ...(prices || {}), ...(fetched || {}) };
+                        const portfolio = usePortfolioStore.getState();
+                        const balanceNow = useBalanceStore.getState().balance;
+                        const totalValue = balanceNow + portfolio.holdings.reduce((s, h) => {
+                          const p = combined[h.symbol]?.price ?? (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+                          return s + h.quantity * p;
+                        }, 0);
+                        usePortfolioStore.getState().addHistoryPoint(totalValue);
+                      } catch (err) {
+                        console.error('Failed to append history point after buy', err);
+                      }
+                    } else toast.error('Insufficient balance or invalid quantity');
+                  })();
+                }
+                setIsTradeDialogOpen(false);
+              }}
+            />
+          </div>
         )}
 
         {activeCategory === "challenges" && (

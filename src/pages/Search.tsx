@@ -57,13 +57,17 @@ const Search = () => {
 
         const fetchedAssets = responses
           .filter(({ data, error }) => !error && data?.currentPrice)
-          .map(({ data }) => ({
-            symbol: data.symbol,
-            name: data.currentPrice.longName || data.currentPrice.shortName || data.symbol,
-            price: data.currentPrice.price || 0,
-            change: data.currentPrice.diff || 0,
-            changePercent: data.currentPrice.regularMarketChangePercent || 0,
-          }));
+          .map(({ data }) => {
+            const cp = data.currentPrice;
+            const pct = cp.regularMarketChangePercent ?? (cp.previousClose ? (cp.diff / cp.previousClose) * 100 : 0);
+            return {
+              symbol: data.symbol,
+              name: cp.longName || cp.shortName || data.symbol,
+              price: cp.price || 0,
+              change: cp.diff || 0,
+              changePercent: typeof pct === 'number' ? pct : 0,
+            };
+          });
 
         setPopularAssets(fetchedAssets);
       } catch (error) {

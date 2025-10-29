@@ -6,115 +6,23 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import NavigationBar from "@/components/NavigationBar";
 import StockCard from "@/components/StockCard";
+import mockStocks from "@/data/mockStocks";
+import TradeDialog from "@/components/TradeDialog";
+import { usePortfolioStore } from "@/stores/portfolioStore";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import LoginReward from "@/components/LoginReward";
 import { Stock, Portfolio } from "@/types";
 import { Coins, Briefcase, ArrowUp, ArrowDown } from "lucide-react";
+import LiveBadge from "@/components/LiveBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useBalanceStore } from "@/stores/balanceStore";
+import useLivePrices from "@/hooks/useLivePrices";
 
-const mockPortfolio: Portfolio = {
-  userId: "user1",
-  cash: 5000,
-  holdings: [
-    {
-      stockId: "RELIANCE",
-      symbol: "RELIANCE",
-      name: "Reliance Industries Ltd.",
-      quantity: 10,
-      avgBuyPrice: 2500,
-      currentPrice: 2650,
-      value: 26500,
-      change: 1500,
-      changePercent: 6.00,
-    },
-    {
-      stockId: "TCS",
-      symbol: "TCS",
-      name: "Tata Consultancy Services Ltd.",
-      quantity: 5,
-      avgBuyPrice: 3200,
-      currentPrice: 3250,
-      value: 16250,
-      change: 250,
-      changePercent: 1.56,
-    },
-    {
-      stockId: "HDFC",
-      symbol: "HDFCBANK",
-      name: "HDFC Bank Ltd.",
-      quantity: 15,
-      avgBuyPrice: 1400,
-      currentPrice: 1350,
-      value: 20250,
-      change: -750,
-      changePercent: -3.57,
-    },
-  ],
-  totalValue: 68000,
-  dailyChange: 1200,
-  dailyChangePercent: 1.79,
-};
 
-const mockStocks: Stock[] = [
-  {
-    id: "RELIANCE",
-    symbol: "RELIANCE",
-    name: "Reliance Industries Ltd.",
-    price: 2650,
-    change: 45.50,
-    changePercent: 1.75,
-    volume: 7500000,
-    marketCap: 17900000000,
-    sector: "Energy",
-  },
-  {
-    id: "TCS",
-    symbol: "TCS",
-    name: "Tata Consultancy Services Ltd.",
-    price: 3250,
-    change: 35.25,
-    changePercent: 1.10,
-    volume: 3200000,
-    marketCap: 12000000000,
-    sector: "IT",
-  },
-  {
-    id: "INFY",
-    symbol: "INFY",
-    name: "Infosys Ltd.",
-    price: 1450,
-    change: -12.75,
-    changePercent: -0.87,
-    volume: 5100000,
-    marketCap: 6100000000,
-    sector: "IT",
-  },
-  {
-    id: "HDFCBANK",
-    symbol: "HDFCBANK",
-    name: "HDFC Bank Ltd.",
-    price: 1350,
-    change: 17.25,
-    changePercent: 1.29,
-    volume: 3750000,
-    marketCap: 7500000000,
-    sector: "Banking",
-  },
-  {
-    id: "ICICIBANK",
-    symbol: "ICICIBANK",
-    name: "ICICI Bank Ltd.",
-    price: 920,
-    change: -5.50,
-    changePercent: -0.59,
-    volume: 4200000,
-    marketCap: 6400000000,
-    sector: "Banking",
-  },
-];
+
+
 
 const Home = () => {
   const navigate = useNavigate();
@@ -122,17 +30,23 @@ const Home = () => {
   const [lastLoginDate, setLastLoginDate] = useState<string | null>(null);
   const { balance, setBalance } = useBalanceStore();
   const [userPoints, setUserPoints] = useState(0);
-  const [portfolio, setPortfolio] = useState<Portfolio>(mockPortfolio);
   const [trendingStocks, setTrendingStocks] = useState<Stock[]>(mockStocks);
+  const holdings = usePortfolioStore((s) => s.holdings);
+  const trades = usePortfolioStore((s) => s.trades);
+  const history = usePortfolioStore((s) => s.history);
+  const addHistoryPoint = usePortfolioStore((s) => s.addHistoryPoint);
+  const sellStock = usePortfolioStore((s) => s.sellStock);
+  const { prices, fetchPrices, setSymbols } = useLivePrices([], 5000);
+  const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
+  const [selectedHolding, setSelectedHolding] = useState<any | null>(null);
+  const [selectedSellStock, setSelectedSellStock] = useState<Stock | null>(null);
   const [selectedTab, setSelectedTab] = useState("portfolio");
+  const [holdingsView, setHoldingsView] = useState<"invested" | "returns" | "contribution" | "price">("invested");
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
-    setPortfolio(prev => ({
-      ...prev,
-      cash: balance
-    }));
+    // balance is managed by balanceStore; just ensure UI updates
   }, [balance]);
 
   const fetchUserData = useCallback(async () => {
@@ -155,7 +69,13 @@ const Home = () => {
       if (data) {
         const userPoints = data.points || 10000;
         setUserPoints(userPoints);
-        setBalance(userPoints);
+        // Initialize balance from server only once per user to avoid overwriting local trades
+        const initKey = `balance_initialized_${user.id}`;
+        const alreadyInit = localStorage.getItem(initKey);
+        if (!alreadyInit) {
+          setBalance(userPoints);
+          localStorage.setItem(initKey, '1');
+        }
         setLastLoginDate(data.last_login_date);
         setIsFirstLogin(!data.profile_completed);
       }
@@ -187,7 +107,13 @@ const Home = () => {
             if (payload.new && payload.new.points !== undefined) {
               const updatedPoints = payload.new.points || 0;
               setUserPoints(updatedPoints);
-              setBalance(updatedPoints);
+              // Only update local balance from remote changes if balance wasn't initialized locally
+              const initKey = `balance_initialized_${user.id}`;
+              const alreadyInit = localStorage.getItem(initKey);
+              if (!alreadyInit) {
+                setBalance(updatedPoints);
+                localStorage.setItem(initKey, '1');
+              }
             }
           }
         )
@@ -198,6 +124,40 @@ const Home = () => {
       };
     }
   }, [user, fetchUserData, setBalance]);
+
+  // set symbols to fetch: holdings + trending
+  useEffect(() => {
+    const syms = Array.from(new Set([
+      ...holdings.map(h => `${h.symbol}.NS`),
+      ...trendingStocks.map(s => `${s.symbol}.NS`),
+    ]));
+    setSymbols(syms);
+  }, [holdings, trendingStocks]);
+
+  // Periodically snapshot portfolio value into history (every 60s)
+  useEffect(() => {
+    const takeSnapshot = () => {
+      try {
+        const portfolio = usePortfolioStore.getState();
+        const balanceNow = useBalanceStore.getState().balance;
+        const combined = usePortfolioStore.getState();
+        // use currently polled prices from hook
+        const currentPrices = prices || {};
+        const totalValue = balanceNow + portfolio.holdings.reduce((s, h) => {
+          const p = currentPrices[h.symbol]?.price ?? (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+          return s + h.quantity * p;
+        }, 0);
+        usePortfolioStore.getState().addHistoryPoint(totalValue);
+      } catch (err) {
+        console.error('Failed to snapshot portfolio history', err);
+      }
+    };
+
+    const id = setInterval(takeSnapshot, 60000);
+    // take an immediate snapshot as well
+    takeSnapshot();
+    return () => clearInterval(id);
+  }, [prices]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -235,17 +195,47 @@ const Home = () => {
             
             <TabsContent value="portfolio" className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <PortfolioChart
-                  title="Portfolio Value"
-                  value={portfolio.totalValue}
-                  change={portfolio.dailyChange}
-                  changePercent={portfolio.dailyChangePercent}
-                />
+                    {
+                      (() => {
+                        const portfolioValue = balance + holdings.reduce((s, h) => {
+                          const live = prices[h.symbol];
+                          const currentPrice = live ? live.price : (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+                          return s + h.quantity * currentPrice;
+                        }, 0);
+
+                        // map stored history into chart-friendly labels
+                        const chartData = history && history.length > 0 ? history.map((pt) => ({ date: new Date(pt.date).toLocaleTimeString(), value: pt.value })) : undefined;
+
+                        let change = 0;
+                        let changePct = 0;
+                        if (history && history.length >= 2) {
+                          const last = history[history.length - 1].value;
+                          const prev = history[history.length - 2].value;
+                          change = last - prev;
+                          changePct = prev !== 0 ? (change / prev) * 100 : 0;
+                        }
+
+                        return (
+                          <div className="relative">
+                            <div className="absolute right-3 top-3 z-10">
+                              <LiveBadge isLive={Object.keys(prices || {}).length > 0} />
+                            </div>
+                            <PortfolioChart
+                              title="Portfolio Value"
+                              value={portfolioValue}
+                              change={change}
+                              changePercent={changePct}
+                              data={chartData}
+                            />
+                          </div>
+                        );
+                      })()
+                    }
                 
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle>Available Cash</CardTitle>
-                    <div className="text-2xl font-bold">₹{portfolio.cash.toFixed(2)}</div>
+                    <div className="text-2xl font-bold">₹{balance.toFixed(2)}</div>
                     <div className="text-sm text-gray-500">Available for trading</div>
                   </CardHeader>
                   <CardContent className="pt-0">
@@ -256,11 +246,11 @@ const Home = () => {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle>Holdings</CardTitle>
-                    <div className="text-2xl font-bold">{portfolio.holdings.length}</div>
+                    <div className="text-2xl font-bold">{holdings.length}</div>
                     <div className="text-sm text-gray-500">Stocks in portfolio</div>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <Button variant="outline" className="w-full mt-2">View Details</Button>
+                    <Button variant="outline" className="w-full mt-2" onClick={() => navigate('/games', { state: { activeTab: 'simulator' } })}>Trade</Button>
                   </CardContent>
                 </Card>
               </div>
@@ -270,38 +260,151 @@ const Home = () => {
                   <CardTitle>Your Holdings</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <div className="flex gap-2 mb-4">
+                    {[
+                      { key: 'invested', label: 'Current (Invested)' },
+                      { key: 'returns', label: 'Returns (%)' },
+                      { key: 'contribution', label: 'Contribution (Current)' },
+                      { key: 'price', label: 'Price (1D%)' },
+                    ].map((v) => (
+                      <button
+                        key={v.key}
+                        aria-pressed={holdingsView === v.key}
+                        className={`px-3 py-1 rounded-full border ${holdingsView === (v.key as any) ? 'bg-learngreen-600 text-white' : 'bg-white text-gray-700'}`}
+                        onClick={() => setHoldingsView(v.key as any)}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="space-y-4">
-                    {portfolio.holdings.map((holding) => (
-                      <div key={holding.stockId} className="flex justify-between items-center p-3 border rounded-md">
-                        <div>
-                          <div className="font-medium">{holding.symbol}</div>
-                          <div className="text-sm text-gray-500">{holding.name}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium">{holding.quantity} shares</div>
-                          <div className="text-sm text-gray-500">Avg: ₹{holding.avgBuyPrice}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium">₹{holding.value.toFixed(2)}</div>
-                          <div className={holding.change >= 0 ? "text-green-600" : "text-red-600"}>
-                            {holding.change >= 0 ? (
-                              <span className="flex items-center">
-                                <ArrowUp className="h-3 w-3 mr-1" />
-                                {holding.changePercent.toFixed(2)}%
-                              </span>
-                            ) : (
-                              <span className="flex items-center">
-                                <ArrowDown className="h-3 w-3 mr-1" />
-                                {Math.abs(holding.changePercent).toFixed(2)}%
-                              </span>
-                            )}
+                    {holdings.length === 0 && (
+                      <div className="text-center text-gray-500 py-6">You have no holdings yet. Buy stocks from the Trading tab.</div>
+                    )}
+
+                    {holdings.map((holding) => {
+                      const live = prices[holding.symbol];
+                      const mock = mockStocks.find((m) => m.id === holding.stockId) as Stock | undefined;
+                      const currentPrice = live ? live.price : (mock ? mock.price : holding.avgBuyPrice);
+                      const currentChange = live ? live.change ?? 0 : mock ? mock.change ?? 0 : 0;
+                      const value = holding.quantity * currentPrice;
+                      const pnl = value - holding.quantity * holding.avgBuyPrice;
+                      const pnlPct = (pnl / (holding.quantity * holding.avgBuyPrice)) * 100;
+                      const totalHoldingsValue = holdings.reduce((s, h) => {
+                        const m = mockStocks.find((x) => x.id === h.stockId);
+                        const price = prices[h.symbol]?.price ?? (m ? m.price : h.avgBuyPrice);
+                        return s + price * h.quantity;
+                      }, 0);
+                      const sharePercent = totalHoldingsValue > 0 ? (value / totalHoldingsValue) * 100 : 0;
+
+                      return (
+                        <div key={holding.stockId} className="p-3 border rounded-md">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <div className="font-medium">{holding.symbol}</div>
+                              <div className="text-sm text-gray-500">{holding.name}</div>
+                            </div>
+
+                            <div className="text-right">
+                              {holdingsView === 'invested' && (
+                                <>
+                                  <div className="font-semibold text-lg">₹{value.toFixed(2)}</div>
+                                  <div className="text-sm text-gray-500">{holding.quantity} Qty • Avg ₹{holding.avgBuyPrice.toFixed(2)}</div>
+                                </>
+                              )}
+
+                              {holdingsView === 'returns' && (
+                                <div className={pnl >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  <div className="font-medium">{pnl >= 0 ? '+' : '-'}₹{Math.abs(pnl).toFixed(2)}</div>
+                                  <div className="text-sm">{pnlPct.toFixed(2)}%</div>
+                                </div>
+                              )}
+
+                              {holdingsView === 'contribution' && (
+                                <div className="w-36">
+                                  <div className="text-sm text-gray-500">{sharePercent.toFixed(1)}%</div>
+                                  <div className="h-2 bg-gray-200 rounded mt-1 overflow-hidden">
+                                    <div className="h-2 bg-learngreen-600" style={{ width: `${sharePercent}%` }} />
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">₹{value.toFixed(2)}</div>
+                                </div>
+                              )}
+
+                              {holdingsView === 'price' && (
+                                <div className="text-right">
+                                  <div className="font-medium">₹{currentPrice.toFixed(2)}</div>
+                                  <div className={`text-sm ${currentChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentChange >= 0 ? '+' : ''}{currentChange.toFixed(2)} ({live?.changePercent?.toFixed(2) ?? (mock?.changePercent ?? 0).toFixed(2)}%)
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex justify-end">
+                            <Button size="sm" variant="outline" onClick={async () => {
+                              // fetch fresh price before opening sell dialog
+                              const symNs = `${holding.symbol}.NS`;
+                              const fetched = await fetchPrices([symNs]);
+                              const liveFetched = fetched[holding.symbol] || prices[holding.symbol];
+                              const priceToUse = liveFetched ? liveFetched.price : (mock ? mock.price : holding.avgBuyPrice);
+                              const stockObj: Stock = {
+                                id: holding.stockId,
+                                symbol: holding.symbol,
+                                name: holding.name,
+                                price: priceToUse,
+                                change: liveFetched?.change ?? (mock?.change ?? 0),
+                                changePercent: liveFetched?.changePercent ?? (mock?.changePercent ?? 0),
+                                volume: mock?.volume ?? 0,
+                                marketCap: mock?.marketCap ?? 0,
+                                sector: mock?.sector ?? "",
+                              };
+                              setSelectedHolding(holding);
+                              setSelectedSellStock(stockObj);
+                              setIsSellDialogOpen(true);
+                            }}>Sell</Button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
+              <TradeDialog
+                open={isSellDialogOpen}
+                onOpenChange={setIsSellDialogOpen}
+                stock={selectedSellStock}
+                action="sell"
+                onConfirm={(qty) => {
+                  if (!selectedHolding) return;
+                  (async () => {
+                    const symNs = `${selectedHolding.symbol}.NS`;
+                    const fetched = await fetchPrices([symNs]);
+                    const live = fetched[selectedHolding.symbol] || prices[selectedHolding.symbol];
+                    const priceToUse = live ? live.price : (mockStocks.find((m) => m.id === selectedHolding.stockId)?.price ?? selectedHolding.avgBuyPrice);
+                    const ok = sellStock(selectedHolding.stockId, qty, priceToUse);
+                    if (ok) toast.success(`Sold ${qty} ${selectedHolding.symbol} @ ₹${priceToUse.toFixed(2)}`);
+                    else toast.error('Sell failed: invalid qty');
+                      // append a history snapshot after successful sell
+                      if (ok) {
+                        try {
+                          const combined = { ...(prices || {}), ...(fetched || {}) };
+                          const portfolio = usePortfolioStore.getState();
+                          const balanceNow = useBalanceStore.getState().balance;
+                          const totalValue = balanceNow + portfolio.holdings.reduce((s, h) => {
+                            const p = combined[h.symbol]?.price ?? (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+                            return s + h.quantity * p;
+                          }, 0);
+                          usePortfolioStore.getState().addHistoryPoint(totalValue);
+                        } catch (err) {
+                          console.error('Failed to append history point after sell', err);
+                        }
+                      }
+                      setIsSellDialogOpen(false);
+                      setSelectedHolding(null);
+                  })();
+                }}
+              />
             </TabsContent>
             
             <TabsContent value="trading" className="space-y-6">
