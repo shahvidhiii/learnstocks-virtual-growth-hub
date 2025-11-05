@@ -23,7 +23,8 @@ serve(async (req) => {
       });
     } catch (fetchError) {
       console.error('Error fetching Python API:', fetchError);
-      return new Response(JSON.stringify({ error: `Could not connect to Python API. Is it running? Details: ${fetchError.message}` }), {
+      const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown error';
+      return new Response(JSON.stringify({ error: `Could not connect to Python API. Is it running? Details: ${errorMessage}` }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 504,
       });
@@ -43,7 +44,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('General function error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
     });

@@ -26,7 +26,7 @@ serve(async (req) => {
     }
 
     // ✅ Fetch current quote
-    const quote = await yahooFinance.quote(symbol);
+    const quote = await (yahooFinance as any).quote(symbol);
 
     // Include additional fields so clients can compute % change and show names
     const currentPrice = {
@@ -43,7 +43,7 @@ serve(async (req) => {
 
     // ✅ Fetch historical data if days is provided
     if (days) {
-      const result = await yahooFinance.historical(symbol, {
+      const result = await (yahooFinance as any).historical(symbol, {
         period1: new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000),
         period2: new Date(),
         interval: "1d",
