@@ -16,6 +16,11 @@ import { useBalanceStore } from "@/stores/balanceStore";
 import { useAuth } from "@/contexts/AuthContext";
 import StockCard from "@/components/StockCard";
 import useLivePrices from "@/hooks/useLivePrices";
+import { RefreshCw, TrendingUp, TrendingDown, Badge as BadgeIcon } from "lucide-react";
+import { useMarketChallengeStore } from "@/stores/marketChallengeStore";
+import type { PredictionDirection } from "@/stores/marketChallengeStore";
+import { supabase } from "@/integrations/supabase/client";
+import { useGamePointsStore } from "@/stores/gamePointsStore";
 
 // ==                         QUESTION POOLS                          ==
 
@@ -291,7 +296,6 @@ const Games = () => {
   
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(0);
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
   // Simulator state
   const [searchQuery, setSearchQuery] = useState("");
@@ -304,6 +308,16 @@ const Games = () => {
   const { addToBalance } = useBalanceStore();
   const { user } = useAuth();
   const { prices, fetchPrices, setSymbols } = useLivePrices([], 5000);
+  // prediction store hooks
+  const predictions = useMarketChallengeStore(s => s.predictions);
+  const addPrediction = useMarketChallengeStore(s => s.addPrediction);
+  const evaluatePredictions = useMarketChallengeStore(s => s.evaluatePredictions);
+  const clearAllPredictions = useMarketChallengeStore(s => s.clearAll);
+  // game points store hooks
+  const events = useGamePointsStore(s => s.events);
+  const addGamePointEvent = useGamePointsStore(s => s.addEvent);
+  const todayPointsISO = new Date().toISOString().slice(0,10);
+  const todayPoints = events.filter(e => e.dateISO === todayPointsISO).reduce((sum, e) => sum + e.points, 0);
 
   // Dynamically build quizzes using the large question pools
   const mockQuizzes: Quiz[] = [
@@ -374,13 +388,107 @@ const Games = () => {
     setSymbols(syms);
   }, [searchQuery]);
 
+  // helper for evaluation (fetch historical and compute day change percent)
+  const getDayChangePercent = useCallback(async (symbol: string, dateISO: string) => {
+    try {
+      const days = 14;
+      const { data, error } = await supabase.functions.invoke('get-stock-data', { body: { symbol: `${symbol}.NS`, days } });
+      if (error || !data?.historicalData) return null;
+      const hist = (data.historicalData as any[]).map(h => ({ date: new Date(h.date).toISOString().slice(0,10), close: h.close as number }))
+        .sort((a,b)=>a.date.localeCompare(b.date));
+      const idx = hist.findIndex(h => h.date === dateISO);
+      if (idx <= 0) return null;
+      const prev = hist[idx-1].close; const close = hist[idx].close;
+      return ((close - prev)/prev)*100;
+    } catch { return null; }
+  }, []);
+
+  const handleEvaluateNow = () => {
+    evaluatePredictions(getDayChangePercent);
+  };
+
+  const todayISO = new Date().toISOString().slice(0,10);
+
+  const PredictionPicker: React.FC<{ filteredStocks: any[]; prices: any; fetchPrices: any }> = ({ filteredStocks, prices }) => (
+    <div className="grid md:grid-cols-2 gap-4">
+      {filteredStocks.slice(0,8).map(stock => {
+        const live = prices[stock.symbol];
+        const price = live ? live.price : stock.price;
+        const already = predictions.some(p => p.symbol === stock.symbol && p.dateISO === todayISO && !p.resolved);
+        const place = (dir: PredictionDirection) => {
+          if (already) { toast.info(`Already predicted for ${stock.symbol} today.`); return; }
+          addPrediction({ symbol: stock.symbol, dateISO: todayISO, direction: dir });
+          toast.success(`Prediction placed: ${stock.symbol} ${dir}`);
+        };
+        return (
+          <div key={stock.id} className="p-3 border rounded flex items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold">{stock.symbol}</div>
+              <div className="text-sm text-gray-500">{stock.name}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-medium">₹{price.toFixed(2)}</div>
+              <div className="text-xs text-gray-500">Today</div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={already} onClick={()=>place('UP')}>
+                <TrendingUp className="h-4 w-4 mr-1"/>Up
+              </Button>
+              <Button size="sm" variant="destructive" disabled={already} onClick={()=>place('DOWN')}>
+                <TrendingDown className="h-4 w-4 mr-1"/>Down
+              </Button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const PredictionsList: React.FC<{ prices: any }> = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Your Predictions</CardTitle>
+          <CardDescription>Status and results for today & previous days</CardDescription>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleEvaluateNow}><RefreshCw className="h-4 w-4 mr-1"/>Evaluate</Button>
+          <Button variant="ghost" onClick={clearAllPredictions}>Clear</Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {predictions.length === 0 ? <div className="text-center text-gray-500 py-6">No predictions yet.</div> : (
+          <div className="space-y-2">
+            {predictions.map(p => (
+              <div key={p.id} className="p-2 border rounded flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs px-2 py-1 bg-gray-100 rounded">{p.dateISO}</span>
+                  <div className="font-medium">{p.symbol}</div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className={`font-semibold ${p.direction==='UP'?'text-green-600':'text-red-600'}`}>{p.direction}</div>
+                  {p.resolved ? (
+                    <div className={`text-sm ${p.correct ? 'text-green-700' : 'text-orange-600'}`}>{p.correct?'+500':'-100'} pts</div>
+                  ) : <div className="text-sm text-gray-500">Pending</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+
   const handleQuizComplete = (score: number) => {
     if (!selectedQuiz || !user) return;
     
     const earnedPoints = Math.round((score / selectedQuiz.questions.length) * selectedQuiz.points);
-    
-    setTotalPoints(prev => prev + earnedPoints);
     addToBalance(earnedPoints);
+    // log to centralized game points store so header updates immediately
+    try {
+      addGamePointEvent({ source: "quiz", label: selectedQuiz.title, points: earnedPoints });
+    } catch {}
     toast.success(`Quiz Complete! You earned ${earnedPoints} points! 🏆`);
     
     // Mark this specific quiz as completed for today for this user
@@ -405,7 +513,7 @@ const Games = () => {
           <h1 className="text-3xl font-bold">Games & Quizzes</h1>
           <div className="bg-learngreen-100 px-4 py-2 rounded-lg flex items-center shadow-sm">
             <Trophy className="h-5 w-5 text-learngreen-600 mr-2" />
-            <span className="font-semibold text-learngreen-700">{totalPoints} Points Earned Today</span>
+            <span className="font-semibold text-learngreen-700">{todayPoints} Points Earned Today</span>
           </div>
         </div>
         
@@ -594,17 +702,27 @@ const Games = () => {
         )}
 
         {activeCategory === "challenges" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Market Prediction Challenge</CardTitle>
-              <CardDescription>This feature is currently under development. Check back soon!</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col items-center justify-center text-center text-gray-500 py-16">
-              <Timer className="h-16 w-16 text-gray-300 mb-4" />
-              <p className="font-semibold">Are you ready to compete?</p>
-              <p>Live market challenges are on the way.</p>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            {/* Prediction Input */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Direction Prediction</CardTitle>
+                <CardDescription>Predict if a stock will close UP or DOWN today. Correct: +500 • Wrong: -100</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <input
+                    className="w-full border p-2 rounded"
+                    placeholder="Search stock (e.g. RELIANCE)"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={searchQuery}
+                  />
+                </div>
+                <PredictionPicker filteredStocks={filteredStocks} prices={prices} fetchPrices={fetchPrices} />
+              </CardContent>
+            </Card>
+            <PredictionsList prices={prices} />
+          </div>
         )}
       </main>
       

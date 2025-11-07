@@ -16,14 +16,10 @@ import {
   Shield, 
   Bell, 
   ChevronRight,
-  PieChart, 
-  Briefcase, 
-  BookOpen, 
-  Award, 
-  Play
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import NavigationBar from "@/components/NavigationBar";
+import ResourceSection from "@/components/ResourceSection";
 
 const More = () => {
   const { user, signOut } = useAuth();
@@ -61,77 +57,28 @@ const More = () => {
           </CardContent>
         </Card>
         
-        {/* Portfolio Diversification Section */}
-        <h2 className="text-lg font-semibold mb-3">Portfolio Diversification</h2>
-        <Card className="mb-8">
-          <CardContent className="p-0">
-            <div className="divide-y">
-              <Link to="/diversification/fd" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <Briefcase className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>Fixed Deposits</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-              
-              <Link to="/diversification/gold" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <CreditCard className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>Gold Investments</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-              
-              <Link to="/diversification/ipo" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <Award className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>IPOs</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-              
-              <Link to="/diversification/ncd" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <Shield className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>NCDs</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-              
-              <Link to="/diversification/bonds" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <PieChart className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>Bonds</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Learning & Knowledge Section */}
-        <h2 className="text-lg font-semibold mb-3">Learning & Knowledge</h2>
-        <Card className="mb-8">
-          <CardContent className="p-0">
-            <div className="divide-y">
-              <Link to="/learning/courses" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <BookOpen className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>Courses</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-              
-              <Link to="/learning/webinars" className="flex items-center justify-between p-4 hover:bg-gray-50">
-                <div className="flex items-center">
-                  <Play className="h-5 w-5 mr-3 text-learngreen-600" />
-                  <span>Webinars</span>
-                </div>
-                <ChevronRight size={18} className="text-gray-400" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Portfolio Diversification Section (External Resources) */}
+        <ResourceSection
+          title="Portfolio Diversification"
+          items={[
+            { label: "Fixed Deposits", href: "https://www.hdfcbank.com/personal/resources/learning-centre/savings-and-investments/what-is-fixed-deposit" },
+            { label: "Gold Investments", href: "https://www.mygov.in/mygold/" },
+            { label: "IPOs", href: "https://www.chittorgarh.com/report/ipo-dashboard-live-ipo-gmp/92/" },
+            { label: "NCDs", href: "https://www.chittorgarh.com/report/ncd-public-issues-in-india/59/" },
+            { label: "Bonds", href: "https://www.rbi.org.in/Scripts/BS_ViewBonds.aspx" },
+          ]}
+        />
+
+        {/* Learning & Knowledge Section (External Resources) */}
+        <div className="mt-8">
+          <ResourceSection
+            title="Learning & Knowledge"
+            items={[
+              { label: "Courses", href: "https://zerodha.com/varsity/" },
+              { label: "Webinars", href: "https://www.nseindia.com/learn/nse-academy" },
+            ]}
+          />
+        </div>
         
         {/* Account Settings */}
         <h2 className="text-lg font-semibold mb-3">Account Settings</h2>
