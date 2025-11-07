@@ -1,18 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
 import NavigationBar from "@/components/NavigationBar";
-import StockCard from "@/components/StockCard";
 import mockStocks from "@/data/mockStocks";
 import TradeDialog from "@/components/TradeDialog";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import LoginReward from "@/components/LoginReward";
 import { Stock, Portfolio } from "@/types";
-import { Coins, Briefcase, ArrowUp, ArrowDown } from "lucide-react";
+import { PieChart } from "lucide-react";
+import { useRef } from "react";
 import LiveBadge from "@/components/LiveBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,10 +35,16 @@ const Home = () => {
   const addHistoryPoint = usePortfolioStore((s) => s.addHistoryPoint);
   const sellStock = usePortfolioStore((s) => s.sellStock);
   const { prices, fetchPrices, setSymbols } = useLivePrices([], 5000);
+  // Sell dialog state for holdings list
   const [isSellDialogOpen, setIsSellDialogOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<any | null>(null);
   const [selectedSellStock, setSelectedSellStock] = useState<Stock | null>(null);
-  const [selectedTab, setSelectedTab] = useState("portfolio");
+  // Range selection for portfolio chart
+  const [range, setRange] = useState<'1D' | '1W' | '1M' | '1Y'>('1M');
+  const [seriesLoading, setSeriesLoading] = useState(false);
+  const [seriesData, setSeriesData] = useState<{ date: string; value: number }[]>([]);
+  // Bring back holdings list (below) and enable scroll target
+  const holdingsRef = useRef<HTMLDivElement | null>(null);
   const [holdingsView, setHoldingsView] = useState<"invested" | "returns" | "contribution" | "price">("invested");
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
@@ -125,14 +129,13 @@ const Home = () => {
     }
   }, [user, fetchUserData, setBalance]);
 
-  // set symbols to fetch: holdings + trending
+  // set symbols to fetch: holdings only (removed Trading section)
   useEffect(() => {
     const syms = Array.from(new Set([
       ...holdings.map(h => `${h.symbol}.NS`),
-      ...trendingStocks.map(s => `${s.symbol}.NS`),
     ]));
     setSymbols(syms);
-  }, [holdings, trendingStocks]);
+  }, [holdings]);
 
   // Periodically snapshot portfolio value into history (every 60s)
   useEffect(() => {
@@ -159,6 +162,90 @@ const Home = () => {
     return () => clearInterval(id);
   }, [prices]);
 
+  // Helper: compute portfolio equity series for selected range using historical prices
+  useEffect(() => {
+    (async () => {
+      try {
+        setSeriesLoading(true);
+        const dayMap = { '1D': 2, '1W': 7, '1M': 30, '1Y': 365 } as const; // 1D uses last 2 days for a line
+        const days = dayMap[range];
+        // Use all traded symbols so history reflects past holdings
+        const symbols = Array.from(new Set(usePortfolioStore.getState().trades.map(t => t.symbol)));
+        if (symbols.length === 0) {
+          setSeriesData([]);
+          setSeriesLoading(false);
+          return;
+        }
+
+        // Fetch historical for each symbol
+        const results = await Promise.all(symbols.map(async (sym) => {
+          const { data, error } = await supabase.functions.invoke('get-stock-data', { body: { symbol: `${sym}.NS`, days } });
+          if (error) return { sym, hist: [] as { date: string; close: number }[] };
+          let hist = (data?.historicalData || []).map((it: any) => ({
+            date: new Date(it.date).toISOString().slice(0, 10),
+            close: it.close as number,
+          }));
+          // Ensure ascending by date
+          hist.sort((a, b) => a.date.localeCompare(b.date));
+          // forward-fill close for missing days will be handled later by last-known lookup
+          return { sym, hist };
+        }));
+
+        // Build a sorted union of dates
+        const dateSet = new Set<string>();
+        for (const r of results) for (const h of r.hist) dateSet.add(h.date);
+        const dates = Array.from(dateSet).sort((a, b) => a.localeCompare(b));
+
+        // Pre-index historical by symbol
+        const histBySym: Record<string, { date: string; close: number }[]> = {};
+        results.forEach(({ sym, hist }) => { histBySym[sym] = hist; });
+
+        // Helper: get last known close on or before a date
+        const lastCloseOnOrBefore = (sym: string, date: string) => {
+          const arr = histBySym[sym] || [];
+          let last = undefined as number | undefined;
+          for (const rec of arr) {
+            if (rec.date > date) break;
+            last = rec.close;
+          }
+          return last ?? 0;
+        };
+
+        // Pre-index trades by symbol
+        const tradesBySym: Record<string, { date: string; qty: number; type: 'BUY' | 'SELL' }[]> = {};
+        for (const t of usePortfolioStore.getState().trades) {
+          (tradesBySym[t.symbol] ||= []).push({ date: t.date, qty: t.quantity, type: t.type });
+        }
+        for (const sym of Object.keys(tradesBySym)) tradesBySym[sym].sort((a, b) => a.date.localeCompare(b.date));
+
+        // Compute equity series: for each date, sum qty(sym,<=date)*price(sym,date)
+        const series: { date: string; value: number }[] = [];
+        for (const d of dates) {
+          let total = 0;
+          for (const sym of symbols) {
+            // effective qty up to end of date d
+            const ts = tradesBySym[sym] || [];
+            let qty = 0;
+            for (const tr of ts) {
+              if (tr.date.slice(0, 10) <= d) qty += tr.type === 'BUY' ? tr.qty : -tr.qty;
+            }
+            if (qty <= 0) continue;
+            const px = lastCloseOnOrBefore(sym, d);
+            total += qty * px;
+          }
+          series.push({ date: d, value: total });
+        }
+
+        setSeriesData(series);
+      } catch (e) {
+        console.error('Failed to compute portfolio series', e);
+        setSeriesData([]);
+      } finally {
+        setSeriesLoading(false);
+      }
+    })();
+  }, [range, trades.length]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
@@ -169,32 +256,97 @@ const Home = () => {
       />
       
       <main className="container mx-auto px-4 py-6">
-        <div className="mb-6 bg-white rounded-lg shadow p-4 flex justify-between items-center">
-          <div className="flex items-center">
-            <div className="bg-learngreen-100 p-3 rounded-full mr-4">
-              <Coins className="h-6 w-6 text-learngreen-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold">Your Balance</h2>
-              <p className="text-3xl font-bold text-learngreen-700">{isLoading ? "Loading..." : `₹${balance.toLocaleString()}`}</p>
-            </div>
-          </div>
-          <Button className="bg-learngreen-600 hover:bg-learngreen-700" onClick={handleTradeNow}>Add More Points</Button>
-        </div>
+        {/* Portfolio Overview Allocation (green theme) */}
+        {(() => {
+          const investedValue = holdings.reduce((s, h) => {
+            const live = prices[h.symbol];
+            const currentPrice = live ? live.price : (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+            return s + h.quantity * currentPrice;
+          }, 0);
+          const cashValue = balance;
+          const total = investedValue + cashValue;
+          const investedPct = total > 0 ? (investedValue / total) * 100 : 0;
+          const cashPct = total > 0 ? (cashValue / total) * 100 : 0;
+          // P&L for stocks vs cost
+          const investedCost = holdings.reduce((s, h) => s + h.quantity * h.avgBuyPrice, 0);
+          const stocksPnL = investedValue - investedCost;
+          const stocksPnLPct = investedCost > 0 ? (stocksPnL / investedCost) * 100 : 0;
+          return (
+            <Card className="mb-6">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0">
+                <div>
+                  <CardTitle className="text-xl">Portfolio Overview</CardTitle>
+                  <p className="text-sm text-gray-500">Total value across cash and holdings</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-learngreen-600" />
+                  <Button size="sm" className="h-7 px-2 bg-learngreen-600" onClick={handleTradeNow}>Trade Now</Button>
+                  <Button size="sm" variant="outline" className="h-7 px-2" onClick={handleTradeNow}>Add More Cash</Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Stocks allocation */}
+                <div
+                  className="rounded-xl p-4 flex items-start justify-between mb-3 border relative overflow-hidden"
+                  style={{
+                    backgroundColor: '#ecfdf5',
+                  }}
+                >
+                  {/* Green striped overlay */}
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-60"
+                    style={{
+                      background: 'repeating-linear-gradient(45deg, rgba(16,185,129,0.18) 0, rgba(16,185,129,0.18) 12px, rgba(16,185,129,0.06) 12px, rgba(16,185,129,0.06) 24px)'
+                    }}
+                  />
+                  {/* Content */}
+                  <div className="relative w-full flex items-start justify-between">
+                  <div onClick={() => holdingsRef.current?.scrollIntoView({ behavior: 'smooth' })} className="cursor-pointer select-none">
+                    <div className="text-xl font-bold">Stocks</div>
+                    <div className="text-lg text-gray-700">{investedPct.toFixed(0)}%</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-extrabold">₹{investedValue.toLocaleString()}</div>
+                    <div className={`text-sm font-semibold ${stocksPnL >= 0 ? 'text-green-600' : 'text-orange-500'}`}>
+                      {stocksPnL >= 0 ? '+' : ''}₹{Math.abs(stocksPnL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {' '}
+                      ({stocksPnLPct.toFixed(2)}%)
+                    </div>
+                  </div>
+                  </div>
+                </div>
+
+                {/* Cash allocation */}
+                <div
+                  className="rounded-xl p-4 flex items-start justify-between border relative overflow-hidden"
+                  style={{ backgroundColor: '#f3f4f6' }}
+                >
+                  <div
+                    aria-hidden
+                    className="absolute inset-0 opacity-50"
+                    style={{
+                      background: 'repeating-linear-gradient(45deg, rgba(107,114,128,0.18) 0, rgba(107,114,128,0.18) 12px, rgba(107,114,128,0.06) 12px, rgba(107,114,128,0.06) 24px)'
+                    }}
+                  />
+                  <div className="relative w-full flex items-start justify-between">
+                  <div className="select-none">
+                    <div className="text-xl font-bold">Cash</div>
+                    <div className="text-lg text-gray-700">{cashPct.toFixed(0)}%</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-extrabold">₹{cashValue.toLocaleString()}</div>
+                    <div className="text-sm text-gray-600">Available balance</div>
+                  </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
         
-        <div className="mb-6">
-          <Tabs 
-            value={selectedTab} 
-            onValueChange={setSelectedTab}
-            className="w-full"
-          >
-            <TabsList className="grid grid-cols-2 mb-6">
-              <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
-              <TabsTrigger value="trading">Trading</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="portfolio" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mb-6 space-y-6">
+              <div className="grid grid-cols-1 gap-6">
                     {
                       (() => {
                         const portfolioValue = balance + holdings.reduce((s, h) => {
@@ -203,14 +355,17 @@ const Home = () => {
                           return s + h.quantity * currentPrice;
                         }, 0);
 
-                        // map stored history into chart-friendly labels
-                        const chartData = history && history.length > 0 ? history.map((pt) => ({ date: new Date(pt.date).toLocaleTimeString(), value: pt.value })) : undefined;
+                        // Use computed seriesData for selected range; fallback to quick history if empty
+                        const chartData = (seriesData && seriesData.length > 0)
+                          ? seriesData
+                          : (history && history.length > 0 ? history.map((pt) => ({ date: new Date(pt.date).toLocaleTimeString(), value: pt.value })) : undefined);
 
+                        // change based on last two points of selected series
                         let change = 0;
                         let changePct = 0;
-                        if (history && history.length >= 2) {
-                          const last = history[history.length - 1].value;
-                          const prev = history[history.length - 2].value;
+                        if (chartData && chartData.length >= 2) {
+                          const last = chartData[chartData.length - 1].value;
+                          const prev = chartData[chartData.length - 2].value;
                           change = last - prev;
                           changePct = prev !== 0 ? (change / prev) * 100 : 0;
                         }
@@ -226,35 +381,30 @@ const Home = () => {
                               change={change}
                               changePercent={changePct}
                               data={chartData}
+                              height={340}
                             />
+                            {/* Range selector */}
+                            <div className="mt-3 flex gap-2">
+                              {(['1D','1W','1M','1Y'] as const).map((r) => (
+                                <button
+                                  key={r}
+                                  className={`px-3 py-1 rounded-full border ${range === r ? 'bg-learngreen-600 text-white' : 'bg-white text-gray-700'}`}
+                                  onClick={() => setRange(r)}
+                                  disabled={seriesLoading && range !== r}
+                                >
+                                  {r}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         );
                       })()
                     }
                 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle>Available Cash</CardTitle>
-                    <div className="text-2xl font-bold">₹{balance.toFixed(2)}</div>
-                    <div className="text-sm text-gray-500">Available for trading</div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <Button className="w-full bg-learngreen-600 hover:bg-learngreen-700 mt-2" onClick={handleTradeNow}>Trade Now</Button>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle>Holdings</CardTitle>
-                    <div className="text-2xl font-bold">{holdings.length}</div>
-                    <div className="text-sm text-gray-500">Stocks in portfolio</div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <Button variant="outline" className="w-full mt-2" onClick={() => navigate('/games', { state: { activeTab: 'simulator' } })}>Trade</Button>
-                  </CardContent>
-                </Card>
+                {/* Removed Available Cash and Holdings summary cards */}
               </div>
-              
+              {/* Holdings section returned below */}
+              <div ref={holdingsRef} />
               <Card>
                 <CardHeader>
                   <CardTitle>Your Holdings</CardTitle>
@@ -405,49 +555,6 @@ const Home = () => {
                   })();
                 }}
               />
-            </TabsContent>
-            
-            <TabsContent value="trading" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Stock Market</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-medium text-lg">Trending Stocks</h3>
-                    <Button variant="outline" size="sm">View All</Button>
-                  </div>
-                  
-                  <ScrollArea className="h-[400px] pr-4">
-                    <div className="space-y-3">
-                      {trendingStocks.map((stock) => (
-                        <StockCard
-                          key={stock.id}
-                          stock={stock}
-                          onSelect={(stock) => {
-                            console.log("Selected stock:", stock);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Trades</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8 text-gray-500">
-                    <Briefcase className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                    <p>You haven't made any trades yet.</p>
-                    <p className="mt-1">Start trading to see your history here!</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
         </div>
       </main>
     </div>

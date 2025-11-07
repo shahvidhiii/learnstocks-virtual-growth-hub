@@ -1,3 +1,13 @@
+// This file is an Edge Function meant to run on Deno (Supabase functions).
+// The repository's TypeScript tooling (tsc / TS Server) runs in the Node project
+// context and doesn't understand Deno-specific imports like `https://deno.land/...`
+// or the `npm:` specifier. That can show spurious errors in your editor.
+//
+// To avoid editor/type-check noise for this Deno-targeted file we disable
+// TS checking here (it's still runnable by the Supabase/Deno runtime):
+// @ts-nocheck
+// deno-lint-ignore-file
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import yahooFinance from "npm:yahoo-finance2";
 

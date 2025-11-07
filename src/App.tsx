@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 
 // ✅ Import the new StockDetail page
 import StockDetail from "./pages/StockDetail";
+import HoldingsPage from "./pages/Holdings";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,11 @@ const App = () => (
             <Route path="/home" element={
               <ProtectedRoute>
                 <Home />
+              </ProtectedRoute>
+            } />
+            <Route path="/holdings" element={
+              <ProtectedRoute>
+                <HoldingsPage />
               </ProtectedRoute>
             } />
             <Route path="/search" element={

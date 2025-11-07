@@ -22,6 +22,7 @@ interface PortfolioChartProps {
   changePercent: number;
   data?: { date: string; value: number }[];
   className?: string;
+  height?: number;
 }
 
 export function PortfolioChart({
@@ -32,6 +33,7 @@ export function PortfolioChart({
   changePercent,
   data: chartData = data,
   className,
+  height = 200,
 }: PortfolioChartProps) {
   const isPositive = change >= 0;
   
@@ -47,7 +49,7 @@ export function PortfolioChart({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="h-[200px] w-full">
+        <div className="w-full" style={{ height }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
