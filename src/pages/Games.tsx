@@ -9,7 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { GamepadIcon, Trophy, BookOpen, Brain, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Quiz, QuizQuestion } from "@/types";
-import mockStocks from "@/data/mockStocks";
+// Replaced mockStocks with the expanded real NSE universe provided by user
+const predictionUniverse = [
+  "ETERNAL.NS","RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
+  "HINDUNILVR.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", "KOTAKBANK.NS",
+  "LT.NS", "BAJFINANCE.NS", "AXISBANK.NS", "ASIANPAINT.NS", "MARUTI.NS",
+  "WIPRO.NS", "ADANIENT.NS", "ULTRACEMCO.NS", "NESTLEIND.NS", "ONGC.NS"
+];
+// Lightweight metadata cache (name filled later from live price response)
+type BasicStock = { symbol: string; name?: string };
+const baseStocks: BasicStock[] = predictionUniverse.map(s => ({ symbol: s.replace('.NS',''), name: s.replace('.NS','') }));
 import TradeDialog from "@/components/TradeDialog";
 import { usePortfolioStore } from "@/stores/portfolioStore";
 import { useBalanceStore } from "@/stores/balanceStore";
@@ -376,16 +385,16 @@ const Games = () => {
     setIsQuizDialogOpen(true);
   };
 
-  const filteredStocks = mockStocks.filter((s) => {
+  const filteredStocks = baseStocks.filter((s) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    return s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+    return s.symbol.toLowerCase().includes(q) || (s.name||'').toLowerCase().includes(q);
   });
 
   // keep live prices updated for displayed stocks
   useEffect(() => {
-    const syms = filteredStocks.map(s => `${s.symbol}.NS`);
-    setSymbols(syms);
+    // Always keep polling full universe for fairness in predictions & simulator
+    setSymbols(predictionUniverse);
   }, [searchQuery]);
 
   // helper for evaluation (fetch historical and compute day change percent)
@@ -413,7 +422,7 @@ const Games = () => {
     <div className="grid md:grid-cols-2 gap-4">
       {filteredStocks.slice(0,8).map(stock => {
         const live = prices[stock.symbol];
-        const price = live ? live.price : stock.price;
+        const price = live ? live.price : (0);
         const already = predictions.some(p => p.symbol === stock.symbol && p.dateISO === todayISO && !p.resolved);
         const place = (dir: PredictionDirection) => {
           if (already) { toast.info(`Already predicted for ${stock.symbol} today.`); return; }
@@ -421,13 +430,13 @@ const Games = () => {
           toast.success(`Prediction placed: ${stock.symbol} ${dir}`);
         };
         return (
-          <div key={stock.id} className="p-3 border rounded flex items-center justify-between gap-3">
+          <div key={stock.symbol} className="p-3 border rounded flex items-center justify-between gap-3">
             <div>
               <div className="font-semibold">{stock.symbol}</div>
-              <div className="text-sm text-gray-500">{stock.name}</div>
+              <div className="text-sm text-gray-500">{live?.name || stock.name}</div>
             </div>
             <div className="text-right">
-              <div className="font-medium">₹{price.toFixed(2)}</div>
+              <div className="font-medium">{price ? `₹${price.toFixed(2)}` : '—'}</div>
               <div className="text-xs text-gray-500">Today</div>
             </div>
             <div className="flex gap-2">
@@ -626,9 +635,9 @@ const Games = () => {
                 <div className="grid md:grid-cols-2 gap-4">
                     {filteredStocks.map((stock) => {
                       const live = prices[stock.symbol];
-                      const display = { ...stock, price: live ? live.price : stock.price };
+                      const display = { id: stock.symbol, symbol: stock.symbol, name: live?.name || stock.name || stock.symbol, price: live?.price || 0, change: live?.change || 0, changePercent: live?.changePercent || 0, volume: 0, marketCap: 0, sector: '' } as any;
                       return (
-                        <div key={stock.id} onClick={() => { setSelectedStock(display); setTradeAction('buy'); setIsTradeDialogOpen(true); }}>
+                        <div key={stock.symbol} onClick={() => { setSelectedStock(display); setTradeAction('buy'); setIsTradeDialogOpen(true); }}>
                           <StockCard stock={display} />
                         </div>
                       );
@@ -685,7 +694,7 @@ const Games = () => {
                         const portfolio = usePortfolioStore.getState();
                         const balanceNow = useBalanceStore.getState().balance;
                         const totalValue = balanceNow + portfolio.holdings.reduce((s, h) => {
-                          const p = combined[h.symbol]?.price ?? (mockStocks.find((m) => m.id === h.stockId)?.price ?? h.avgBuyPrice);
+                          const p = combined[h.symbol]?.price ?? h.avgBuyPrice;
                           return s + h.quantity * p;
                         }, 0);
                         usePortfolioStore.getState().addHistoryPoint(totalValue);
